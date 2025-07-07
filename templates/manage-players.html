@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block content %}
+<!--
+    Manage Players page for a specific tournament.
+    - Lets admin select/clear participants, save, generate, or clear fixtures.
+    - Shows round 1 fixtures and allows CSV export.
+    - Includes navigation back to edit tournament or dashboard.
+-->
+<div class="main-container">
+    <h2>Manage Players for {{ tournament['name'] }}</h2>
+    <small class="muted-info">If you did not save any changes, please go back and save them before generating
+        fixtures.</small>
+    <form method="post" action="">
+        <div class="flex-end gap-1 mb-05">
+            <button type="button" class="btn-secondary select-all-btn">Select All</button>
+            <button type="button" class="btn-secondary clear-all-btn">Clear All</button>
+            <button type="submit" class="btn-primary save-participants-btn">Save Participants</button>
+        </div>
+        <div class="scrollable-table mb-15">
+            <table class="tournament-table members-table">
+                <thead>
+                    <tr>
+                        <th>Select</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Rating</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for member in members %}
+                    <tr>
+                        <td><input type="checkbox" name="participants" value="{{ member['id'] }}" {% if member['id'] in
+                                selected_ids %}checked{% endif %}></td>
+                        <td>{{ member['name'] }}</td>
+                        <td>{{ member['email'] or '-' }}</td>
+                        <td>{{ member['rating'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </form>
+    <div class="flex-end gap-1 mb-2rem">
+        <form method="post" action="{{ url_for('generate_fixtures', tournament_id=tournament['id']) }}"
+            style="display:inline;">
+            <button type="submit" class="btn-secondary">Generate Fixtures</button>
+        </form>
+        <form method="post" action="{{ url_for('clear_fixtures', tournament_id=tournament['id']) }}"
+            style="display:inline;">
+            <button type="submit" class="btn-secondary">Clear Fixtures</button>
+        </form>
+    </div>
+    {% if fixtures %}
+    <!-- Round 1 fixtures table -->
+    <div id="fixtures-anchor"></div>
+    <div class="flex-between mb-05">
+        <h3 class="mb-0">Round 1 Fixtures</h3>
+        <a href="{{ url_for('export_fixtures_csv', tournament_id=tournament['id']) }}"
+            class="btn-secondary export-csv-btn"><i class="fa-solid fa-download icon-left"></i>Export to CSV</a>
+    </div>
+    <table class="tournament-table">
+        <thead>
+            <tr>
+                <th>Player 1</th>
+                <th>Player 2</th>
+                <th>Result</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for fixture in fixtures %}
+            <tr>
+                <td>{{ fixture['player1_name'] }}</td>
+                <td>{% if fixture['player2_name'] %}{{ fixture['player2_name'] }}{% else %}BYE{% endif %}</td>
+                <td>{{ fixture['result'] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    <!-- Navigation buttons -->
+    <div class="flex-start gap-1 mt-15">
+        <a href="{{ url_for('edit_tournament', tournament_id=tournament['id']) }}" class="btn-secondary"><i
+                class="fa-solid fa-arrow-left icon-left"></i>Back</a>
+        <a href="{{ url_for('index') }}" class="btn-secondary"><i class="fa-solid fa-house icon-left"></i>Back to
+            Dashboard</a>
+    </div>
+</div>
+<!-- Scripts for select/clear all functionality -->
+<script src="{{ url_for('static', filename='js/affectAll.js') }}"></script>
+<script src="{{ url_for('static', filename='js/scrollToFixtures.js') }}"></script>
+{% endblock %}

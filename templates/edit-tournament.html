@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block content %}
+<!--
+    Tournament editing page.
+    - Admins can update tournament details and format.
+    - Save changes or proceed to manage players/fixtures.
+    - Includes back button to dashboard.
+-->
+<form class="tournament-form" action="/edit-tournament/{{ tournament['id'] }}" method="post" autocomplete="off">
+    <h2 class="edit-tournament-title">Edit Tournament</h2>
+    <label for="name">Tournament Name</label>
+    <input type="text" name="name" id="name" value="{{ tournament['name'] }}" required placeholder="e.g. Sydney Open">
+
+    <label for="date">Date</label>
+    <input type="date" name="date" id="date" value="{{ tournament['date'] }}" required>
+
+    <label for="location">Location</label>
+    <input type="text" name="location" id="location" value="{{ tournament['location'] }}" required
+        placeholder="e.g. Sydney Chess Club">
+
+    <label for="format">Format</label>
+    <select name="format" id="format" required>
+        <option value="" disabled>Select format</option>
+        <option value="Swiss" {% if tournament['format']=='Swiss' %}selected{% endif %}>Swiss</option>
+        <option value="Round-robin" {% if tournament['format']=='Round-robin' %}selected{% endif %}>Round-robin</option>
+        <option value="Knockout" {% if tournament['format']=='Knockout' %}selected{% endif %}>Knockout</option>
+    </select>
+    <small class="muted-info">
+        Click <strong>"next"</strong> to select participants and generate first round fixtures/pairings.
+        <br><br><strong>Make sure to save all changes before proceeding.</strong>
+    </small>
+
+    <a href="/tournament/{{ tournament['id'] }}/manage-players" class="btn-primary next-btn">Next</a>
+    <button type="submit" class="btn-primary save-changes-btn">Save Changes</button>
+    <a href="{{ url_for('index') }}" class="btn-secondary back-dashboard-btn">
+        <i class="fa-solid fa-home icon-left"></i>
+        Back to Dashboard
+    </a><br>
+    {% if tournament and tournament['id'] %}
+    {% endif %}
+</form>
+
+{% endblock %}

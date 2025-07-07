@@ -1,0 +1,78 @@
+<!--
+    Base template for Sydney Chess Club Admin Portal.
+    - Provides global navbar, footer, and flash message logic.
+    - All other pages extend this template and inject content into the 'content' block.
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <!-- Meta and global styles/scripts -->
+    <meta charset="UTF-8">
+    <title>Sydney Chess Club Admin Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="icon" href="{{ url_for('static', filename='img/chess-logo.png') }}" type="image/x-icon">
+</head>
+
+<body>
+    <!-- Navigation bar: shows links based on admin login state -->
+    <nav class="navbar">
+        <span class="brand"><i class="fa-solid fa-chess icon-left"></i>Sydney Chess Club</span>
+        <div class="navbar-links">
+            {% if session.username %}
+            <!-- Authenticated admin links -->
+            <a href="{{ url_for('index') }}" id="nav-dashboard" {% if request.endpoint=='index' %}class="active" {%
+                endif %}>Dashboard</a>
+            <a href="{{ url_for('create_tournament') }}" id="nav-new-tournament" {% if
+                request.endpoint=='create_tournament' %}class="active" {% endif %}>Create Tournament</a>
+            <a href="{{ url_for('manage_members') }}" id="nav-manage-members" {% if request.endpoint=='manage_members'
+                %}class="active" {% endif %}>Club Members</a>
+            <a href="{{ url_for('manage_admins') }}" id="nav-manage-admins" {% if request.endpoint=='manage_admins'
+                %}class="active" {% endif %}>Administrators</a>
+            <a href="{{ url_for('reports') }}" id="nav-reports" {% if request.endpoint=='reports' %}class="active" {%
+                endif %}>Reports & Analytics</a>
+            <a href="{{ url_for('logout') }}" class="logout-link">
+                <i class="fa-solid fa-right-from-bracket icon-left"></i>Logout</a>
+            {% else %}
+            <!-- Unauthenticated links -->
+            <a href="{{ url_for('login') }}" id="nav-login" {% if request.endpoint=='login' %}class="active" {% endif
+                %}>
+                <i class="fa-solid fa-right-to-bracket icon-left"></i>
+                Login
+            </a>
+            <a href="{{ url_for('signup') }}" id="nav-signup" {% if request.endpoint=='signup' %}class="active" {% endif
+                %}>
+                <i class="fa-solid fa-user-plus icon-left"></i>
+                Sign Up
+            </a>
+            {% endif %}
+        </div>
+    </nav>
+    <!-- Main content area: child templates inject their content here -->
+    <main class="content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <!-- Flash messages for user feedback -->
+        <div class="flashes">
+            {% for category, message in messages %}
+            <div class="flash-message flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        <script src="{{ url_for('static', filename='js/flashMessage.js') }}"></script>
+        {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+    <!-- Persistent footer for admin-only notice -->
+    <footer class="site-footer">
+        <div class="footer-content">
+            This is an <b>administrator only</b> control panel for the Sydney Chess Club. Unauthorized access is
+            prohibited.
+        </div>
+    </footer>
+</body>
+
+</html>

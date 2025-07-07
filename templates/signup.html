@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+<!--
+    Signup page for new administrators.
+    - Form with username and password fields, live password validation, and criteria list.
+    - Shows error message if signup fails.
+    - Includes password visibility toggle and link to login.
+-->
+<form class="auth-form" method="post" action="{{ url_for('signup') }}" id="signupForm">
+    <h2>Sign Up</h2>
+    {% if error %}
+    <div class="error-message">{{ error }}</div>
+    {% endif %}
+
+    <label for="username">Username:</label>
+    <input type="text" name="username" required>
+    <small>
+        <p class="muted-info">Username must not contain spaces or whitespace.</p>
+    </small><br>
+
+    <label for="password">Password:</label>
+    <div class="password-wrapper">
+        <input type="password" name="password" id="signup-password" required class="password-input">
+        <span class="toggle-password signup-toggle">
+            <i class="fa-solid fa-eye" id="signup-eye"></i>
+        </span>
+    </div>
+
+    <small>
+        <p class="muted-info">Password must contain:</p>
+        <ul id="password-criteria" class="password-criteria-list">
+            <li id="length">At least 8 characters</li>
+            <li id="letter">At least one letter</li>
+            <li id="number">At least one number</li>
+            <li id="special">At least one special character</li>
+        </ul>
+    </small>
+
+    <button type="submit" id="submitBtn" disabled class="btn-primary">Sign Up</button>
+    <div class="form-footer">
+        Already have an account?
+        <a href="{{ url_for('login') }}">Log in</a>
+    </div>
+</form>
+
+<script src="{{ url_for('static', filename='js/livePasswordValidation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/togglePassword.js') }}"></script>
+
+{% endblock %}

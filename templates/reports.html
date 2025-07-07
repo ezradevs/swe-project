@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block content %}
+<!--
+    Enhanced Reports & Analytics page for Sydney Chess Club Admins.
+    - Visualizes club health, engagement, and admin activity with clear, modern UI.
+    - Top 5 members and admin activity are side-by-side in styled white cards.
+-->
+<div class="main-container reports-analytics">
+    <h2 class="mb-2">Club Analytics & Insights</h2>
+    <!-- Stat Tiles: Key Metrics -->
+    <div class="dashboard-grid mb-2">
+        <div class="stat-tile tile-blue">
+            <div class="tile-icon"><i class="fa-solid fa-users"></i></div>
+            <div class="tile-label">Total Members</div>
+            <div class="tile-value">{{ total_members or '—' }}</div>
+        </div>
+        <div class="stat-tile tile-green">
+            <div class="tile-icon"><i class="fa-solid fa-chess"></i></div>
+            <div class="tile-label">Tournaments Hosted</div>
+            <div class="tile-value">{{ total_tournaments or '—' }}</div>
+        </div>
+        <div class="stat-tile tile-purple">
+            <div class="tile-icon"><i class="fa-solid fa-star"></i></div>
+            <div class="tile-label">Avg. Member Rating</div>
+            <div class="tile-value">{{ avg_rating or '—' }}</div>
+        </div>
+        <div class="stat-tile tile-orange">
+            <div class="tile-icon"><i class="fa-solid fa-user-plus"></i></div>
+            <div class="tile-label">Newest Member</div>
+            <div class="tile-value">{{ recent_member or '—' }}</div>
+        </div>
+    </div>
+    <!-- Club Growth & Engagement Section -->
+    <div class="analytics-section">
+        <div class="analytics-card" id="growth-card">
+            <h3 class="analytics-title"><i class="fa-solid fa-chart-line icon-left"></i> Membership Growth</h3>
+            <canvas id="growthChart" height="220"></canvas>
+            <div class="analytics-caption">Monthly new members (last 12 months)</div>
+        </div>
+    </div>
+    <!-- Side-by-side cards for Top Members and Admin Activity -->
+    <div class="analytics-row">
+        <div class="analytics-card leaderboard-card">
+            <h4><i class="fa-solid fa-crown icon-left"></i> Top 5 Members by Rating</h4>
+            <ol class="mini-leaderboard">
+                {% for member in top_members %}
+                <li><span class="leader-rank">{{ loop.index }}</span> {{ member.name }} <span class="leader-rating">{{
+                        member.rating }}</span></li>
+                {% else %}
+                <li class="muted-info">No members found.</li>
+                {% endfor %}
+            </ol>
+        </div>
+        <div class="analytics-card admin-activity-card">
+            <h4><i class="fa-solid fa-user-shield icon-left"></i> Admin Activity</h4>
+            <ul class="admin-activity-list">
+                {% for admin in admin_activity %}
+                <li><span class="admin-name">{{ admin.username }}</span> <span class="admin-action">{{ admin.action
+                        }}</span> <span class="admin-date">{{ admin.date }}</span></li>
+                {% else %}
+                <li class="muted-info">No recent admin actions.</li>
+                {% endfor %}
+            </ul>
+            <div class="analytics-caption">Recent admin actions (add, edit, delete, etc.)</div>
+        </div>
+    </div>
+</div>
+<!-- growthChart.js for visualizations -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/growthChart.js') }}"></script>
+
+{% endblock %}

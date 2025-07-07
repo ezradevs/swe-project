@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block content %}
+<!--
+    Club Members management page.
+    - Lists all members with edit/delete actions.
+    - Includes modals for adding and editing members.
+    - Navigation back to dashboard.
+-->
+<div class="main-container">
+    <div class="members-header">
+        <h2>Club Members</h2>
+        <button class="btn-primary ml-auto" id="addMemberBtn" type="button">
+            <i class="fa-solid fa-user-plus icon-left"></i>Add Member
+        </button>
+    </div>
+    <a href="{{ url_for('index') }}" class="btn-secondary mb-1em">
+        <i class="fa-solid fa-house icon-left"></i>
+        Back to Dashboard
+    </a>
+    <table class="tournament-table members-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Rating</th>
+                <th>Joined</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for member in members %}
+            <tr data-member-id="{{ member['id'] }}" data-member-name="{{ member['name'] }}"
+                data-member-email="{{ member['email'] or '' }}" data-member-rating="{{ member['rating'] }}">
+                <td>{{ member['name'] }}</td>
+                <td>{{ member['email'] or '-' }}</td>
+                <td>{{ member['rating'] }}</td>
+                <td>{% set dt = member['joined_at'] %}{{ dt[:10].split('-')[2] }}-{{ dt[:10].split('-')[1] }}-{{
+                    dt[:10].split('-')[0] }}</td>
+                <td>
+                    <button type="button" class="btn-table btn-edit" onclick="openEditModal(this)"><i
+                            class="fa-solid fa-pen"></i></button>
+                    <form method="post" action="{{ url_for('delete_member', member_id=member['id']) }}"
+                        class="inline-form">
+                        <button type="submit" class="btn-table btn-delete"
+                            onclick="return confirm('Delete this member?');"><i class="fa-solid fa-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<!-- Add Member Modal -->
+<div id="addMemberModal" class="modal modal-hide">
+    <div class="modal-content">
+        <span class="close" id="closeModal">&times;</span>
+        <h2>Add New Member</h2><br>
+        <form method="post" action="{{ url_for('add_member') }}" class="add-member-form">
+            <label for="new-name" class="fw-500">Name</label>
+            <input type="text" name="name" id="new-name" required>
+            <label for="new-email" class="fw-500">Email</label>
+            <input type="email" name="email" id="new-email">
+            <label for="new-rating" class="fw-500">Rating</label>
+            <input type="number" name="rating" id="new-rating" min="100" max="3000" value="1200">
+            <button type="submit" class="btn-primary mt-1rem">Add Member</button>
+        </form>
+    </div>
+</div>
+<!-- Edit Member Modal -->
+<div id="editMemberModal" class="modal modal-hide">
+    <div class="modal-content">
+        <span class="close" id="closeEditModal">&times;</span>
+        <h2>Edit Member</h2><br>
+        <form method="post" id="editMemberForm" class="add-member-form">
+            <label for="edit-name">Name</label>
+            <input type="text" name="name" id="edit-name" required>
+            <label for="edit-email">Email</label>
+            <input type="email" name="email" id="edit-email">
+            <label for="edit-rating">Rating</label>
+            <input type="number" name="rating" id="edit-rating" min="100" max="3000">
+            <button type="submit" class="btn-primary mt-1rem">Save Changes</button>
+        </form>
+    </div>
+</div>
+<!-- Scripts for modal logic -->
+<script src="{{ url_for('static', filename='js/addMemberModal.js') }}"></script>
+{% endblock %}

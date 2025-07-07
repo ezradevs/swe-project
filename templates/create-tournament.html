@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+<!--
+    Tournament creation page.
+    - Admins fill out tournament details and select format.
+    - After submission, redirected to participant selection.
+    - Includes back button to dashboard.
+-->
+<form class="tournament-form" action="/create-tournament" method="post" autocomplete="off">
+    <h2 class="create-tournament-title">Create Tournament</h2>
+    <label for="name">Tournament Name</label>
+    <input type="text" name="name" id="name" required placeholder="e.g. Sydney Open">
+
+    <label for="date">Date</label>
+    <input type="date" name="date" id="date" required>
+
+    <label for="location">Location</label>
+    <input type="text" name="location" id="location" required placeholder="e.g. Sydney Chess Club">
+
+    <label for="format">Format</label>
+    <select name="format" id="format" required>
+        <option value="" disabled selected>Select format</option>
+        <option value="Swiss">Swiss</option>
+        <option value="Round-robin">Round-robin</option>
+        <option value="Knockout">Knockout</option>
+    </select>
+
+    <small class="muted-info">After creating the tournament, you will be prompted to select participants and generate
+        fixtures.</small>
+    <button type="submit" class="btn-primary create-tournament-btn">Create Tournament</button>
+    <a href="{{ url_for('index') }}" class="btn-secondary back-dashboard-btn">
+        <i class="fa-solid fa-home icon-left"></i>
+        Back to Dashboard
+    </a><br>
+</form>
+
+{% endblock %}

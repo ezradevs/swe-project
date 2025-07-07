@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+<!--
+    Completed Tournaments page.
+    - Lists all completed tournaments in a table.
+    - Includes navigation back to dashboard.
+-->
+<div class="main-container">
+    <h2 class="completed-tournaments-title">Completed Tournaments</h2>
+    <a href="{{ url_for('index') }}" class="btn-secondary mb-1em">
+        <i class="fa-solid fa-house icon-left"></i>
+        Back to Dashboard
+    </a>
+    {% if tournaments %}
+    <table class="tournament-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Date</th>
+                <th>Location</th>
+                <th>Format</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in tournaments %}
+            <tr>
+                <td>{{ t.name }}</td>
+                <td>{{ t.date|datetimeformat }}</td>
+                <td>{{ t.location }}</td>
+                <td>{{ t.format }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="no-tournaments">No completed tournaments yet.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

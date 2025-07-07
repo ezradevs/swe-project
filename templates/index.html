@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% block content %}
+<!--
+    Dashboard page for Sydney Chess Club Admin Portal.
+    - Shows welcome message, quick action buttons, stat cards, and lists upcoming tournaments.
+    - Includes modal for changing password (admin only).
+    - All dynamic values are injected from Flask backend.
+-->
+<div class="main-container">
+    <!-- Header with logo and welcome message -->
+    <div class="dashboard-header">
+        <img src="{{ url_for('static', filename='img/chess-logo.png') }}" alt="Chess Club Logo" class="dashboard-logo">
+        <div>
+            <h2>Sydney Chess Club Administrator Portal</h2>
+            {% if session.username %}
+            <p class="welcome-msg">Welcome, <strong>{{ session.username }}</strong>!</p>
+            {% else %}
+            <p class="welcome-msg">Welcome to the Chess Club Admin Portal.</p>
+            {% endif %}
+        </div>
+    </div>
+    <!-- Quick action buttons for admins -->
+    <div class="dashboard-actions">
+        {% if session.username %}
+        <a href="{{ url_for('create_tournament') }}" class="btn-primary">
+            <i class="fa-solid fa-plus icon-left"></i>Create New Tournament
+        </a>
+        <a href="" class="btn-primary">
+            <i class="fa-solid fa-envelope icon-left"></i>View Messages
+        </a>
+        <a href="{{ url_for('logout') }}" class="btn-secondary">
+            <i class="fa-solid fa-right-from-bracket icon-left"></i>Logout
+        </a>
+        <a href="#" id="changePasswordBtn" class="btn-secondary">
+            <i class="fa-solid fa-key icon-left"></i>Change Password
+        </a>
+        <a href="{{ url_for('delete_account') }}" class="btn-delete-account"
+            onclick="return confirm('Are you sure you want to delete your account? This cannot be undone.');">
+            <i class="fa-solid fa-user-xmark icon-left"></i>Delete Account
+        </a>
+        {% else %}
+        <a href="{{ url_for('login') }}" class="btn-primary">
+            <i class="fa-solid fa-right-to-bracket icon-left"></i>Log in to manage tournaments
+        </a>
+        {% endif %}
+    </div>
+    <!-- Stat cards for quick overview -->
+    <div class="dashboard-summary">
+        <a href="{{ url_for('completed_tournaments') }}" class="no-underline">
+            <div class="summary-card">
+                <span class="summary-title">Completed Tournaments</span>
+                <span class="summary-value">{{ completed_tournaments_count }}</span>
+            </div>
+        </a>
+        <a href="{{ url_for('manage_members') }}" class="no-underline">
+            <div class="summary-card">
+                <span class="summary-title">Total Club Members</span>
+                <span class="summary-value">{{ total_members }}</span>
+            </div>
+        </a>
+        <a href="{{ url_for('manage_admins') }}" class="no-underline">
+            <div class="summary-card">
+                <span class="summary-title">Total Administrators</span>
+                <span class="summary-value">{{ members|length }}</span>
+            </div>
+        </a>
+        <div class="summary-card">
+            <span class="summary-title">Upcoming Tournaments</span>
+            <span class="summary-value">{{ tournaments|length }}</span>
+        </div>
+    </div>
+    <!-- Upcoming tournaments table -->
+    <div class="tournament-section">
+        <div class="tournament-section-header flex-between">
+            <h3 class="tournament-section-title">Upcoming Tournaments</h3>
+            <a href="{{ url_for('completed_tournaments') }}" class="view-completed-link">View Completed Tournaments</a>
+        </div>
+        {% if tournaments %}
+        <table class="tournament-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Date</th>
+                    <th>Location</th>
+                    <th>Format</th>
+                    {% if session.username %}
+                    <th>Actions</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tournaments %}
+                <tr>
+                    <td>{{ t['name'] }}</td>
+                    <td>
+                        {% set dt = t['date'] %}
+                        {% if dt %}
+                        {{ dt | datetimeformat('%d-%m-%Y') }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>{{ t['location'] }}</td>
+                    <td>{{ t['format'] }}</td>
+                    {% if session.username %}
+                    <td>
+                        <a href="{{ url_for('edit_tournament', tournament_id=t['id']) }}" class="btn-table">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </a>
+                        <form method="POST" action="{{ url_for('delete_tournament', tournament_id=t['id']) }}"
+                            class="inline-form delete-tournament-form"
+                            onsubmit="return confirm('Are you sure you want to delete this tournament?');">
+                            <button type="submit" class="btn-table btn-delete">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="no-tournaments">No tournaments have been created yet.</p>
+        {% endif %}
+    </div>
+</div>
+<!-- Change Password Modal for admins -->
+<div id="changePasswordModal" class="modal">
+    <div class="modal-content">
+        <span class="close" id="closeChangePasswordModal">&times;</span>
+        <h2 class="modal-title">Change Password</h2>
+        <form method="POST" action="{{ url_for('change_password') }}" class="add-member-form" id="changePasswordForm">
+            {% if request.args.get('change_password_error') %}
+            <div class="flash-message flash-danger modal-error">
+                {{ request.args.get('change_password_error') }}
+            </div>
+            {% endif %}
+            <label for="current_password" class="modal-label">Current Password</label>
+            <input type="password" id="current_password" name="current_password" required>
+            <label for="new_password" class="modal-label">New Password</label>
+            <input type="password" id="new_password" name="new_password" required>
+            <small>
+                <p class="muted-info">Password must contain:</p>
+                <ul id="password-criteria" class="password-criteria-list">
+                    <li id="length">At least 8 characters</li>
+                    <li id="letter">At least one letter</li>
+                    <li id="number">At least one number</li>
+                    <li id="special">At least one special character</li>
+                </ul>
+            </small>
+            <label for="confirm_password" class="modal-label">Confirm New Password</label>
+            <input type="password" id="confirm_password" name="confirm_password" required>
+            <button type="submit" class="btn-primary change-password-btn">Change Password</button>
+        </form>
+    </div>
+</div>
+<!-- Dashboard scripts for interactivity -->
+<script src="{{ url_for('static', filename='js/dashboardLogoTilt.js') }}"></script>
+<script src="{{ url_for('static', filename='js/changePasswordModal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/livePasswordDashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/autoPasswordModal.js') }}"></script>
+
+{% endblock %}

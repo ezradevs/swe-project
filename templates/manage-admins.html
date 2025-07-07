@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block content %}
+<!--
+    Manage Administrators page.
+    - Lists all admins and provides edit, password change, and delete actions.
+    - Includes modals for editing, changing password, adding, and secure code for deletion.
+    - Navigation back to dashboard.
+-->
+<div class="main-container">
+    <div class="members-header">
+        <h2>Manage Administrators</h2>
+        <button class="btn-primary ml-auto" id="addAdminBtn" type="button">
+            <i class="fa-solid fa-user-plus mr-05em"></i>Add Administrator
+        </button>
+    </div>
+    <table class="tournament-table members-table">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for admin in admins %}
+            <tr>
+                <td>{{ admin.username }}</td>
+                <td class="admin-actions">
+                    <button class="btn-table btn-edit btn-edit-admin" data-admin-id="{{ admin.id }}"
+                        data-admin-username="{{ admin.username }}"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-table btn-edit btn-change-admin-password" data-admin-id="{{ admin.id }}"><i
+                            class="fa-solid fa-key"></i></button>
+                    <form method="post" action="{{ url_for('delete_admin', admin_id=admin.id) }}" class="d-inline">
+                        <button type="submit" class="btn-table btn-delete"><i class="fa-solid fa-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <br>
+    <a href="{{ url_for('index') }}" class="btn-secondary mb-1em"><i class="fa-solid fa-house mr-05em"></i>Back to
+        Dashboard</a>
+</div>
+<!-- Edit Admin Modal -->
+<div id="editAdminModal" class="modal d-none">
+    <div class="modal-content w-400">
+        <span class="close" id="closeEditAdminModal">&times;</span>
+        <h2>Edit Administrator</h2>
+        <br>
+        <form method="POST" action="{{ url_for('edit_admin', admin_id=0) }}" id="editAdminForm" class="add-member-form">
+            <input type="hidden" name="admin_id" id="editAdminId">
+            <label for="editAdminUsername">Username</label>
+            <input type="text" id="editAdminUsername" name="username" required>
+            <button type="submit" class="btn-primary mt-1em">Save Changes</button>
+        </form>
+    </div>
+</div>
+<!-- Change Admin Password Modal -->
+<div id="changeAdminPasswordModal" class="modal d-none">
+    <div class="modal-content w-400">
+        <span class="close" id="closeChangeAdminPasswordModal">&times;</span>
+        <h2>Change Administrator Password</h2>
+        <br>
+        <form method="POST" action="{{ url_for('change_password') }}" class="add-member-form">
+            <input type="hidden" name="admin_id" id="changePasswordAdminId">
+            {% if request.args.get('show_change_admin_password_modal') and
+            request.args.get('change_admin_password_error') %}
+            <div class="flash-message flash-danger mb-1em">
+                {{ request.args.get('change_admin_password_error') }}
+            </div>
+            {% endif %}
+            <label for="newAdminPassword">New Password</label>
+            <input type="password" id="newAdminPassword" name="new_password" required>
+            <ul id="admin-password-criteria" class="password-criteria-list">
+                <li id="admin-length">At least 8 characters</li>
+                <li id="admin-letter">At least one letter</li>
+                <li id="admin-number">At least one number</li>
+                <li id="admin-special">At least one special character</li>
+            </ul>
+            <label for="confirmAdminPassword">Confirm New Password</label>
+            <input type="password" id="confirmAdminPassword" name="confirm_password" required>
+            <button type="submit" class="btn-primary mt-1em">Change Password</button>
+        </form>
+    </div>
+</div>
+<!-- Add Admin Modal -->
+<div id="addAdminModal" class="modal d-none">
+    <div class="modal-content w-520 min-w-350 w-90vw">
+        <span class="close" id="closeAddAdminModal">&times;</span>
+        <h2>Add Administrator</h2><br>
+        <form method="POST" action="{{ url_for('add_admin') }}" id="addAdminForm" class="add-member-form">
+            {% if request.args.get('show_add_admin_modal') and request.args.get('add_admin_error') %}
+            <div class="flash-message flash-danger mb-1em">
+                {{ request.args.get('add_admin_error') }}
+            </div>
+            {% endif %}
+            <label for="addAdminUsername">Username</label>
+            <input type="text" id="addAdminUsername" name="username" required>
+            <label for="addAdminPassword">Password</label>
+            <input type="password" id="addAdminPassword" name="password" required>
+            <ul id="add-admin-password-criteria" class="password-criteria-list">
+                <li id="add-admin-length">At least 8 characters</li>
+                <li id="add-admin-letter">At least one letter</li>
+                <li id="add-admin-number">At least one number</li>
+                <li id="add-admin-special">At least one special character</li>
+            </ul>
+            <label for="addAdminPasswordConfirm">Confirm Password</label>
+            <input type="password" id="addAdminPasswordConfirm" name="password_confirm" required>
+            <button type="submit" class="btn-primary mt-1em">Add Administrator</button>
+        </form>
+    </div>
+</div>
+<!-- Secure Code Modal for Deleting Admin -->
+<div id="secureCodeModal" class="modal d-none">
+    <div class="modal-content w-400">
+        <span class="close" id="closeSecureCodeModal">&times;</span>
+        <h3>Enter Secure Code</h3><br>
+        <form id="secureCodeForm">
+            <input type="hidden" id="secureDeleteAdminId" name="admin_id">
+            <label for="secureCodeInput">Secure Code</label>
+            <input type="password" id="secureCodeInput" name="secure_code" required autocomplete="off">
+            <button type="submit" class="btn-primary mt-1em">Confirm Delete</button>
+        </form>
+    </div>
+</div>
+<!-- Scripts for modal and password validation logic -->
+<script src="{{ url_for('static', filename='js/manageAdminsModal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/livePasswordAdmin.js') }}"></script>
+<script src="{{ url_for('static', filename='js/livePasswordAddAdmin.js') }}"></script>
+<script src="{{ url_for('static', filename='js/autoAdminPasswordModal.js') }}"></script>
+{% endblock %}
