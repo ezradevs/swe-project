@@ -7,6 +7,7 @@
     - Includes back button to dashboard.
 -->
 <form class="tournament-form" action="/create-tournament" method="post" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <h2 class="create-tournament-title">Create Tournament</h2>
     <label for="name">Tournament Name</label>
     <input type="text" name="name" id="name" required placeholder="e.g. Sydney Open">

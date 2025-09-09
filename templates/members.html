@@ -41,6 +41,7 @@
                             class="fa-solid fa-pen"></i></button>
                     <form method="post" action="{{ url_for('delete_member', member_id=member['id']) }}"
                         class="inline-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <button type="submit" class="btn-table btn-delete"
                             onclick="return confirm('Delete this member?');"><i class="fa-solid fa-trash"></i></button>
                     </form>
@@ -56,6 +57,7 @@
         <span class="close" id="closeModal">&times;</span>
         <h2>Add New Member</h2><br>
         <form method="post" action="{{ url_for('add_member') }}" class="add-member-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label for="new-name" class="fw-500">Name</label>
             <input type="text" name="name" id="new-name" required>
             <label for="new-email" class="fw-500">Email</label>
@@ -72,6 +74,7 @@
         <span class="close" id="closeEditModal">&times;</span>
         <h2>Edit Member</h2><br>
         <form method="post" id="editMemberForm" class="add-member-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label for="edit-name">Name</label>
             <input type="text" name="name" id="edit-name" required>
             <label for="edit-email">Email</label>

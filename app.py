@@ -20,16 +20,15 @@
 #   - All code is extensively commented for maintainability and onboarding
 
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, abort
 import sqlite3
 import bcrypt
 import os
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from functools import wraps
 import random
-
-#test
+import secrets
 
 # --- Database Connection Helper ---
 def get_db_connection():
@@ -37,6 +36,11 @@ def get_db_connection():
     # Sets row_factory to sqlite3.Row for dict-like access to columns.
     conn = sqlite3.connect('data/main.db')
     conn.row_factory = sqlite3.Row
+    # Enforce foreign key constraints
+    try:
+        conn.execute('PRAGMA foreign_keys = ON')
+    except Exception:
+        pass
     return conn
 
 # --- Authentication Decorator ---
@@ -68,7 +72,64 @@ def datetimeformat(value, format='%d-%m-%Y'):
 
 # --- Flask App Setup ---
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev_secret_key')
+
+# App configuration and security defaults
+APP_ENV = os.environ.get('APP_ENV', 'development')
+SECRET_KEY = os.environ.get('FLASK_SECRET_KEY')
+if APP_ENV == 'production' and not SECRET_KEY:
+    raise RuntimeError('FLASK_SECRET_KEY must be set in production')
+app.secret_key = SECRET_KEY or 'dev_secret_key'
+
+# Secure cookie settings
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Strict',
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+)
+
+# Simple CSRF protection
+@app.before_request
+def ensure_csrf_and_session():
+    # Create a CSRF token for the session if missing
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(32)
+    # Enforce CSRF on all POST requests
+    if request.method == 'POST':
+        token = request.form.get('csrf_token')
+        if not token or token != session.get('csrf_token'):
+            abort(400)
+
+# Security headers
+@app.after_request
+def set_security_headers(resp):
+    resp.headers['X-Frame-Options'] = 'DENY'
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    resp.headers['Referrer-Policy'] = 'no-referrer'
+    # CSP: allow self + required CDNs for fonts/icons/charts
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
+        "img-src 'self' data:; "
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'"
+    )
+    resp.headers['Content-Security-Policy'] = csp
+    # HSTS (only makes sense over HTTPS)
+    if request.scheme == 'https':
+        resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+    return resp
+
+# Template helpers
+@app.context_processor
+def inject_globals():
+    allow_signup = False
+    # Allow signup only if ADMIN_SIGNUP_SECRET is set (invite code required)
+    if os.environ.get('ADMIN_SIGNUP_SECRET'):
+        allow_signup = True
+    return dict(csrf_token=session.get('csrf_token'), allow_signup=allow_signup, APP_ENV=APP_ENV)
 app.jinja_env.filters['datetimeformat'] = datetimeformat
 
 # --- FLASK ROUTES ---
@@ -103,30 +164,38 @@ def login():
         # Fetch user from DB
         with get_db_connection() as conn:
             user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-        if user is None:
-            error = "Username not found."
-        else:
+        if user is not None:
             user_password_hash = user['password_hash'] if 'password_hash' in user.keys() else user[1]
             # Check password using bcrypt
-            if not bcrypt.checkpw(password.encode('utf-8'), user_password_hash):
-                error = "Incorrect password."
-            else:
+            if user_password_hash and bcrypt.checkpw(password.encode('utf-8'), user_password_hash):
+                # Rotate session to prevent fixation
+                session.clear()
                 session['username'] = username
+                session['csrf_token'] = secrets.token_hex(32)
                 flash('Logged in successfully', 'success')
                 return redirect(url_for('index'))
+        # Generic error to prevent user enumeration
+        error = "Invalid username or password."
     return render_template('login.html', error=error)
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
-    # Admin signup route. Only creates users in the users table.
+    # Admin signup route. Guarded by invite code via ADMIN_SIGNUP_SECRET.
     # - GET: Show signup form
     # - POST: Validate and create new admin user, log in
+    # Enforce invite-based signup
+    if not os.environ.get('ADMIN_SIGNUP_SECRET'):
+        flash('Admin signup is disabled. Contact an existing administrator.', 'danger')
+        return redirect(url_for('login'))
     error = None
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        invite_code = request.form.get('invite_code', '')
+        if invite_code != os.environ.get('ADMIN_SIGNUP_SECRET'):
+            error = "Invalid invite code."
         # Username and password validation
-        if any(c.isspace() for c in username):
+        elif any(c.isspace() for c in username):
             error = "Username cannot contain spaces or whitespace."
         elif len(password) < 8:
             error = "Password must be at least 8 characters long."
@@ -148,7 +217,9 @@ def signup():
                         (username, hashed_pw)
                     )
                     conn.commit()
+                    session.clear()
                     session['username'] = username
+                    session['csrf_token'] = secrets.token_hex(32)
                     flash('Account created and logged in!', 'success')
                     return redirect(url_for('index'))
     return render_template('signup.html', error=error)
@@ -232,11 +303,10 @@ def delete_tournament(tournament_id):
     flash('Tournament deleted successfully', 'success')
     return redirect(url_for('index'))
 
-@app.route('/delete_account')
+@app.route('/delete_account', methods=['POST'])
 @login_required
 def delete_account():
-    # Delete the current admin's account and log out.
-    # Removes user from DB and clears session.
+    # Delete the current admin's account and log out (POST only, CSRF protected).
     username = session['username']
     with get_db_connection() as conn:
         conn.execute('DELETE FROM users WHERE username = ?', (username,))
@@ -527,7 +597,7 @@ def change_password():
     # On error, redirect with modal open and error message
     if error:
         if is_admin_pw_change:
-            return redirect(url_for('manage-admins', show_change_admin_password_modal=admin_id, change_admin_password_error=error))
+            return redirect(url_for('manage_admins', show_change_admin_password_modal=admin_id, change_admin_password_error=error))
         else:
             return redirect(url_for('index', show_change_password_modal=1, change_password_error=error))
     if is_admin_pw_change:
@@ -600,7 +670,8 @@ def edit_admin(admin_id):
             conn.commit()
             flash('Administrator updated successfully', 'success')
             return redirect(url_for('manage_admins'))
-    return render_template('edit_admin.html', admin=admin)
+    # Render via modal in manage-admins; fallback template not used
+    return render_template('manage-admins.html', admins=[admin])
 
 @app.route('/delete_admin/<int:admin_id>', methods=['POST'])
 @login_required
@@ -623,8 +694,8 @@ def delete_admin(admin_id):
             else:
                 # Require secure code for deleting other admins
                 secure_code = request.form.get('secure_code', '')
-                expected_code = os.environ.get('ADMIN_DELETE_CODE', 'letmein123!')
-                if secure_code != expected_code:
+                expected_code = os.environ.get('ADMIN_DELETE_CODE')
+                if not expected_code or secure_code != expected_code:
                     flash('Incorrect secure code. Administrator not deleted', 'danger')
                     return redirect(url_for('manage_admins'))
                 conn.execute('DELETE FROM users WHERE id = ?', (admin_id,))
@@ -664,7 +735,7 @@ def add_admin():
                 return redirect(url_for('manage_admins'))
     # On error, redirect with modal open and error message
     if error:
-        return redirect(url_for('manage-admins', show_add_admin_modal=1, add_admin_error=error))
+        return redirect(url_for('manage_admins', show_add_admin_modal=1, add_admin_error=error))
     return redirect(url_for('manage_admins'))
 
 @app.route('/tournament/<int:tournament_id>/clear_fixtures', methods=['POST'])
@@ -679,5 +750,6 @@ def clear_fixtures(tournament_id):
     return redirect(url_for('manage_players', tournament_id=tournament_id))
 
 if __name__ == '__main__':
-    # Run the Flask development server on port 3000.
-    app.run(host='0.0.0.0', port=3000, debug=True)
+    # Run the Flask app. Use FLASK_DEBUG=1 to enable debug.
+    debug_mode = os.environ.get('FLASK_DEBUG') == '1'
+    app.run(host='0.0.0.0', port=3000, debug=debug_mode)

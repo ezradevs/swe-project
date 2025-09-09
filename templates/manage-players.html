@@ -11,6 +11,7 @@
     <small class="muted-info">If you did not save any changes, please go back and save them before generating
         fixtures.</small>
     <form method="post" action="">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="flex-end gap-1 mb-05">
             <button type="button" class="btn-secondary select-all-btn">Select All</button>
             <button type="button" class="btn-secondary clear-all-btn">Clear All</button>
@@ -43,10 +44,12 @@
     <div class="flex-end gap-1 mb-2rem">
         <form method="post" action="{{ url_for('generate_fixtures', tournament_id=tournament['id']) }}"
             style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="btn-secondary">Generate Fixtures</button>
         </form>
         <form method="post" action="{{ url_for('clear_fixtures', tournament_id=tournament['id']) }}"
             style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="btn-secondary">Clear Fixtures</button>
         </form>
     </div>

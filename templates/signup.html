@@ -11,6 +11,7 @@
     {% if error %}
     <div class="error-message">{{ error }}</div>
     {% endif %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
     <label for="username">Username:</label>
     <input type="text" name="username" required>
@@ -35,6 +36,9 @@
             <li id="special">At least one special character</li>
         </ul>
     </small>
+
+    <label for="invite_code">Invite Code:</label>
+    <input type="password" name="invite_code" id="invite_code" required>
 
     <button type="submit" id="submitBtn" disabled class="btn-primary">Sign Up</button>
     <div class="form-footer">

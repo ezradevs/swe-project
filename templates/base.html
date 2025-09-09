@@ -38,16 +38,16 @@
                 <i class="fa-solid fa-right-from-bracket icon-left"></i>Logout</a>
             {% else %}
             <!-- Unauthenticated links -->
-            <a href="{{ url_for('login') }}" id="nav-login" {% if request.endpoint=='login' %}class="active" {% endif
-                %}>
+            <a href="{{ url_for('login') }}" id="nav-login" {% if request.endpoint=='login' %}class="active" {% endif %}>
                 <i class="fa-solid fa-right-to-bracket icon-left"></i>
                 Login
             </a>
-            <a href="{{ url_for('signup') }}" id="nav-signup" {% if request.endpoint=='signup' %}class="active" {% endif
-                %}>
+            {% if allow_signup %}
+            <a href="{{ url_for('signup') }}" id="nav-signup" {% if request.endpoint=='signup' %}class="active" {% endif %}>
                 <i class="fa-solid fa-user-plus icon-left"></i>
                 Sign Up
             </a>
+            {% endif %}
             {% endif %}
         </div>
     </nav>

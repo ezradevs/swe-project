@@ -34,10 +34,13 @@
         <a href="#" id="changePasswordBtn" class="btn-secondary">
             <i class="fa-solid fa-key icon-left"></i>Change Password
         </a>
-        <a href="{{ url_for('delete_account') }}" class="btn-delete-account"
-            onclick="return confirm('Are you sure you want to delete your account? This cannot be undone.');">
-            <i class="fa-solid fa-user-xmark icon-left"></i>Delete Account
-        </a>
+        <form method="post" action="{{ url_for('delete_account') }}" class="inline-form"
+            onsubmit="return confirm('Are you sure you want to delete your account? This cannot be undone.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn-delete-account">
+                <i class="fa-solid fa-user-xmark icon-left"></i>Delete Account
+            </button>
+        </form>
         {% else %}
         <a href="{{ url_for('login') }}" class="btn-primary">
             <i class="fa-solid fa-right-to-bracket icon-left"></i>Log in to manage tournaments
@@ -131,6 +134,7 @@
         <span class="close" id="closeChangePasswordModal">&times;</span>
         <h2 class="modal-title">Change Password</h2>
         <form method="POST" action="{{ url_for('change_password') }}" class="add-member-form" id="changePasswordForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             {% if request.args.get('change_password_error') %}
             <div class="flash-message flash-danger modal-error">
                 {{ request.args.get('change_password_error') }}

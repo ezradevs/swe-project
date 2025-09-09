@@ -11,6 +11,7 @@
     {% if error %}
     <div class="error-message">{{ error }}</div>
     {% endif %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
     <label for="username">Username:</label>
     <input type="text" name="username" required><br>
