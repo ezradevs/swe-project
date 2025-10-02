@@ -6,7 +6,7 @@
 echo "Stopping any existing Flask processes..."
 ps aux | grep app.py | grep -v grep | awk '{print $2}' | xargs -r kill
 echo "Creating virtual environment..."
-python3 -m venv venv
+python3 -m venv .venv
 echo "Activating virtual environment..."
 source .venv/bin/activate
 echo "Updating pip..."
