@@ -1085,12 +1085,60 @@ h2 {
     margin: 0;
 }
 
+.admin-header {
+    align-items: flex-start;
+    margin-bottom: -2.3rem;
+}
+
+.admin-header h2 {
+    margin-bottom: 0.4rem;
+}
+
+.admin-controls {
+    margin-bottom: 1rem;
+}
+
+.admin-back-btn {
+    margin-bottom: 1rem;
+}
+
 .members-header-actions {
     margin-left: auto;
     display: inline-flex;
     gap: 0.8rem;
     flex-wrap: wrap;
     align-items: center;
+}
+
+.admin-header-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1rem;
+}
+
+.admin-header-actions .members-filters {
+    justify-content: flex-end;
+}
+
+#adminSearch {
+    min-width: 240px;
+}
+
+.members-table thead th:nth-child(2) {
+    text-align: center;
+}
+
+.admin-header-actions {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+.members-header-buttons {
+    display: inline-flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .members-controls {
@@ -1118,6 +1166,10 @@ h2 {
     gap: 0.4rem;
 }
 
+.admin-filters {
+    justify-content: flex-end;
+}
+
 .filter-label {
     font-size: 0.85rem;
     color: var(--clr-grey);
@@ -1136,6 +1188,10 @@ h2 {
 
 #memberSearch {
     min-width: 260px;
+}
+
+#adminSearch {
+    min-width: 240px;
 }
 
 .filter-group input:focus {

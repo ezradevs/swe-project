@@ -7,23 +7,38 @@
     - Navigation back to dashboard.
 -->
 <div class="main-container">
-    <div class="members-header">
-        <h2>Manage Administrators</h2>
-        <button class="btn-primary ml-auto" id="addAdminBtn" type="button">
-            <i class="fa-solid fa-user-plus mr-05em"></i>Add Administrator
-        </button>
+    <div class="members-header admin-header">
+        <h2 class="manage-admins-title">Manage Administrators</h2>
+        <div class="members-header-actions admin-header-actions">
+            <div class="members-header-buttons">
+                <button class="btn-primary" id="addAdminBtn" type="button">
+                    <i class="fa-solid fa-user-plus mr-05em"></i>Add Administrator
+                </button>
+            </div>
+            <div class="members-filters admin-filters">
+                <div class="filter-group">
+                    <label for="adminSearch" class="filter-label">Search</label>
+                    <input type="search" id="adminSearch" placeholder="Search by username">
+                </div>
+            </div>
+        </div>
     </div>
-    <table class="tournament-table members-table">
+    <div class="members-controls admin-controls">
+        <a href="{{ url_for('index') }}" class="btn-secondary">
+            <i class="fa-solid fa-house mr-05em"></i>Back to Dashboard
+        </a>
+    </div>
+    <table class="tournament-table members-table" id="adminsTable">
         <thead>
             <tr>
-                <th>Username</th>
+                <th data-sort-key="username">Username <i class="fa-solid fa-sort sort-indicator"></i></th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for admin in admins %}
-            <tr>
-                <td>{{ admin.username }}</td>
+            <tr data-admin-username="{{ admin.username }}" data-admin-id="{{ admin.id }}">
+                <td class="cell-admin-name">{{ admin.username }}</td>
                 <td class="admin-actions">
                     <button class="btn-table btn-edit btn-edit-admin" data-admin-id="{{ admin.id }}"
                         data-admin-username="{{ admin.username }}"><i class="fa-solid fa-pen"></i></button>
@@ -39,8 +54,6 @@
         </tbody>
     </table>
     <br>
-    <a href="{{ url_for('index') }}" class="btn-secondary mb-1em"><i class="fa-solid fa-house mr-05em"></i>Back to
-        Dashboard</a>
 </div>
 <!-- Edit Admin Modal -->
 <div id="editAdminModal" class="modal d-none">
@@ -127,9 +140,11 @@
         </form>
     </div>
 </div>
-<!-- Scripts for modal and password validation logic -->
+{% block scripts %}
 <script src="{{ url_for('static', filename='js/manageAdminsModal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/livePasswordAdmin.js') }}"></script>
 <script src="{{ url_for('static', filename='js/livePasswordAddAdmin.js') }}"></script>
 <script src="{{ url_for('static', filename='js/autoAdminPasswordModal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/manageAdminsEnhancements.js') }}"></script>
+{% endblock %}
 {% endblock %}

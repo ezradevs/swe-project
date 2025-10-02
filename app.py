@@ -435,9 +435,14 @@ def add_member():
 def delete_member(member_id):
     # Delete a club member.
     with get_db_connection() as conn:
-        conn.execute('DELETE FROM members WHERE id = ?', (member_id,))
-        conn.commit()
-    flash('Member deleted', 'success')
+        try:
+            conn.execute('DELETE FROM members WHERE id = ?', (member_id,))
+            conn.commit()
+            flash('Member deleted', 'success')
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            flash('Cannot delete member while they are assigned to tournaments. Remove them from fixtures first.',
+                  'danger')
     return redirect(url_for('manage_members'))
 
 @app.route('/reports')
