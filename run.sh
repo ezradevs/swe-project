@@ -8,7 +8,7 @@ ps aux | grep app.py | grep -v grep | awk '{print $2}' | xargs -r kill
 echo "Creating virtual environment..."
 python3 -m venv venv
 echo "Activating virtual environment..."
-source venv/bin/activate
+source .venv/bin/activate
 echo "Updating pip..."
 pip3 install --upgrade pip
 echo "Installing required Python packages..."
