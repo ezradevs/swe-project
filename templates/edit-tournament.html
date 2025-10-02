@@ -4,8 +4,8 @@
     <div class="tournament-manage-header flex-between">
         <div>
             <h2 class="tournament-manage-title">Manage Tournament</h2>
-            <p class="muted-info mb-05">Edit tournament details, control who is playing, and manage first-round
-                fixtures from one screen.</p>
+            <p class="muted-info mb-05">Edit tournament details, control who is playing, and manage fixtures across the
+                entire event from one screen.</p>
         </div>
         <a href="{{ url_for('index') }}" class="btn-secondary"><i class="fa-solid fa-house icon-left"></i>Back to
             Dashboard</a>
@@ -96,12 +96,17 @@
 
     <section class="manage-card" id="fixtures">
         <div class="manage-card-header flex-between">
-            <h3 class="manage-card-title">Round 1 Fixtures</h3>
+            <div>
+                <h3 class="manage-card-title">Tournament Fixtures</h3>
+                <p class="muted-info mb-05">Generate pairings round-by-round, update results as games finish, and export the
+                    entire schedule.</p>
+            </div>
             <div class="fixture-actions">
                 <form method="post" action="{{ url_for('generate_fixtures', tournament_id=tournament['id']) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <button type="submit" class="btn-secondary"><i class="fa-solid fa-shuffle icon-left"></i>Generate
-                        Fixtures</button>
+                    <button type="submit" class="btn-secondary" {% if not can_generate %}disabled title="{{ generate_disabled_reason }}"{% endif %}>
+                        <i class="fa-solid fa-shuffle icon-left"></i>{{ generate_label }}
+                    </button>
                 </form>
                 <form method="post" action="{{ url_for('clear_fixtures', tournament_id=tournament['id']) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -112,31 +117,99 @@
                     class="btn-secondary export-csv-btn"><i class="fa-solid fa-download icon-left"></i>Export CSV</a>
             </div>
         </div>
-        {% if fixtures %}
+        {% if tournament_complete %}
+        <p class="muted-info fw-600">Tournament complete! Review the final standings below.</p>
+        {% endif %}
+
+        {% if round_numbers %}
         <div id="fixtures-anchor"></div>
-        <table class="tournament-table">
-            <thead>
-                <tr>
-                    <th>Player 1</th>
-                    <th>Player 2</th>
-                    <th>Result</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for fixture in fixtures %}
-                <tr>
-                    <td>{{ fixture['player1_name'] }}</td>
-                    <td>{% if fixture['player2_name'] %}{{ fixture['player2_name'] }}{% else %}BYE{% endif %}</td>
-                    <td>{{ fixture['result'] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        {% for round_no in round_numbers %}
+        <div class="fixture-round">
+            <h4 class="fw-600 mb-05">Round {{ round_no }}</h4>
+            <div class="scrollable-table">
+                <table class="tournament-table">
+                    <thead>
+                        <tr>
+                            <th>Player 1</th>
+                            <th>Player 2</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fixture in fixtures_by_round[round_no] %}
+                        <tr>
+                            <td>{{ fixture['player1_name'] }}</td>
+                            <td>{% if fixture['player2_name'] %}{{ fixture['player2_name'] }}{% else %}BYE{% endif %}</td>
+                            <td>
+                                {% if fixture['player2_id'] %}
+                                <form method="post" class="fixture-result-form"
+                                    action="{{ url_for('update_fixture_result', fixture_id=fixture['id']) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <select name="result" onchange="this.form.submit()">
+                                        <option value="TBD" {% if fixture['result']=='TBD' %}selected{% endif %}>TBD</option>
+                                        <option value="1-0" {% if fixture['result']=='1-0' %}selected{% endif %}>{{ fixture['player1_name'] }} win</option>
+                                        <option value="0-1" {% if fixture['result']=='0-1' %}selected{% endif %}>{{ fixture['player2_name'] }} win</option>
+                                        {% if tournament['format'] != 'Knockout' %}
+                                        <option value="0.5-0.5" {% if fixture['result']=='0.5-0.5' %}selected{% endif %}>Draw</option>
+                                        {% endif %}
+                                    </select>
+                                </form>
+                                {% else %}
+                                Bye ({{ fixture['player1_name'] }} gains 1 point)
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
         {% else %}
-        <p class="muted-info">No round 1 fixtures generated yet. Use the Generate Fixtures button once participants are
-            saved.</p>
+        <p class="muted-info">No fixtures generated yet. Use the {{ generate_label }} button once participants are saved.</p>
         {% endif %}
     </section>
+
+    {% if standings %}
+    <section class="manage-card" id="standings">
+        <div class="manage-card-header flex-between">
+            <h3 class="manage-card-title">Standings</h3>
+            <span class="manage-card-meta">Updated automatically as results are entered</span>
+        </div>
+        <div class="scrollable-table">
+            <table class="tournament-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Player</th>
+                        <th>Rating</th>
+                        <th>Score</th>
+                        <th>Wins</th>
+                        <th>Draws</th>
+                        <th>Losses</th>
+                        <th>Byes</th>
+                        <th>Played</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in standings %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ row.player_name }}</td>
+                        <td>{{ row.player_rating if row.player_rating is not none else '-' }}</td>
+                        <td>{{ '{:g}'.format(row.score) }}</td>
+                        <td>{{ row.wins }}</td>
+                        <td>{{ row.draws }}</td>
+                        <td>{{ row.losses }}</td>
+                        <td>{{ row.byes }}</td>
+                        <td>{{ row.played }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
 </div>
 
 <script src="{{ url_for('static', filename='js/affectAll.js') }}"></script>
