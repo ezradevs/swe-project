@@ -27,6 +27,7 @@ import os
 import re
 from datetime import datetime, date, timedelta
 from functools import wraps
+from collections import defaultdict
 import random
 import secrets
 
@@ -131,6 +132,241 @@ def inject_globals():
         allow_signup = True
     return dict(csrf_token=session.get('csrf_token'), allow_signup=allow_signup, APP_ENV=APP_ENV)
 app.jinja_env.filters['datetimeformat'] = datetimeformat
+
+
+# --- Tournament Helper Utilities ---
+
+def fetch_participants(conn, tournament_id):
+    """Return a list of member IDs participating in the tournament."""
+    rows = conn.execute(
+        'SELECT member_id FROM tournament_participants WHERE tournament_id = ? ORDER BY member_id',
+        (tournament_id,),
+    ).fetchall()
+    return [row['member_id'] for row in rows]
+
+
+def fetch_members_by_ids(conn, member_ids):
+    """Return a mapping of member_id -> member row for the given IDs."""
+    if not member_ids:
+        return {}
+    placeholders = ','.join(['?'] * len(member_ids))
+    rows = conn.execute(
+        f'SELECT * FROM members WHERE id IN ({placeholders})',
+        member_ids,
+    ).fetchall()
+    return {row['id']: row for row in rows}
+
+
+def get_all_fixtures(conn, tournament_id):
+    """Fetch all fixtures for a tournament, joined with player names."""
+    return conn.execute(
+        '''
+        SELECT f.*, m1.name AS player1_name, m2.name AS player2_name
+        FROM fixtures f
+        JOIN members m1 ON f.player1_id = m1.id
+        LEFT JOIN members m2 ON f.player2_id = m2.id
+        WHERE f.tournament_id = ?
+        ORDER BY f.round, f.id
+        ''',
+        (tournament_id,),
+    ).fetchall()
+
+
+def build_round_robin_schedule(participants, members):
+    """Generate a full round-robin schedule as a list of rounds with pairings."""
+    if not participants:
+        return []
+    def seed_key(pid):
+        member = members.get(pid)
+        rating = member['rating'] if member and member['rating'] is not None else 0
+        name = member['name'] if member else str(pid)
+        return (-rating, name)
+
+    players = sorted(participants, key=seed_key)
+    if len(players) % 2 == 1:
+        players.append(None)
+    n = len(players)
+    rounds = n - 1
+    schedule = []
+    for _ in range(rounds):
+        pairings = []
+        for i in range(n // 2):
+            p1 = players[i]
+            p2 = players[n - 1 - i]
+            if p1 is not None and p2 is not None:
+                pairings.append((p1, p2))
+            else:
+                bye_player = p1 if p1 is not None else p2
+                if bye_player is not None:
+                    pairings.append((bye_player, None))
+        schedule.append(pairings)
+        # Rotate the players (keeping first player fixed)
+        players = [players[0]] + [players[-1]] + players[1:-1]
+    return schedule
+
+
+def build_initial_swiss_pairings(participants, members):
+    """Swiss round one: pair by rating (top half vs bottom half)."""
+    def seed_key(pid):
+        member = members.get(pid)
+        rating = member['rating'] if member and member['rating'] is not None else 0
+        name = member['name'] if member else str(pid)
+        return (-rating, name)
+
+    sorted_participants = sorted(participants, key=seed_key)
+    mid = len(sorted_participants) // 2
+    top = sorted_participants[:mid]
+    bottom = sorted_participants[mid:]
+    pairings = []
+    for i in range(min(len(top), len(bottom))):
+        pairings.append((top[i], bottom[i]))
+    if len(sorted_participants) % 2 == 1:
+        pairings.append((bottom[-1], None))
+    return pairings
+
+
+def compile_history_and_standings(participants, fixtures, members):
+    """Compute per-player standings and opponent history from fixtures."""
+    standings = {}
+    history = defaultdict(set)
+    for pid in participants:
+        standings[pid] = {
+            'score': 0.0,
+            'wins': 0,
+            'losses': 0,
+            'draws': 0,
+            'byes': 0,
+            'played': 0,
+            'had_bye': False,
+        }
+
+    for fixture in fixtures:
+        p1 = fixture['player1_id']
+        p2 = fixture['player2_id']
+        result = fixture['result']
+        if p2 is None:
+            standings[p1]['score'] += 1
+            standings[p1]['byes'] += 1
+            standings[p1]['played'] += 1
+            standings[p1]['had_bye'] = True
+            continue
+        history[p1].add(p2)
+        history[p2].add(p1)
+        if result == 'TBD':
+            continue
+        if result == '1-0':
+            standings[p1]['score'] += 1
+            standings[p1]['wins'] += 1
+            standings[p2]['losses'] += 1
+        elif result == '0-1':
+            standings[p2]['score'] += 1
+            standings[p2]['wins'] += 1
+            standings[p1]['losses'] += 1
+        elif result == '0.5-0.5':
+            standings[p1]['score'] += 0.5
+            standings[p2]['score'] += 0.5
+            standings[p1]['draws'] += 1
+            standings[p2]['draws'] += 1
+        standings[p1]['played'] += 1
+        standings[p2]['played'] += 1
+
+    # Ensure every participant has a history entry
+    for pid in participants:
+        history[pid] = history.get(pid, set())
+
+    ordered_rows = []
+    for pid in participants:
+        member = members.get(pid)
+        name = member['name'] if member else 'Unknown player'
+        rating = member['rating'] if member and member['rating'] is not None else None
+        rating_for_sort = rating if rating is not None else 0
+        ordered_rows.append(
+            {
+                'member_id': pid,
+                'player_name': name,
+                'player_rating': rating,
+                'rating_for_sort': rating_for_sort,
+                'score': standings[pid]['score'],
+                'wins': standings[pid]['wins'],
+                'losses': standings[pid]['losses'],
+                'draws': standings[pid]['draws'],
+                'played': standings[pid]['played'],
+                'byes': standings[pid]['byes'],
+            }
+        )
+
+    ordered = sorted(
+        ordered_rows,
+        key=lambda row: (
+            -row['score'],
+            -row['wins'],
+            -row['rating_for_sort'],
+            row['player_name'],
+        ),
+    )
+    return standings, history, ordered
+
+
+def swiss_next_round_pairings(participants, standings, history, members):
+    """Generate Swiss pairings based on current standings and history."""
+    players = participants[:]
+    # Sort by score, then rating, then name for deterministic pairing
+    def swiss_key(pid):
+        member = members.get(pid)
+        rating = member['rating'] if member and member['rating'] is not None else 0
+        name = member['name'] if member else str(pid)
+        return (-standings[pid]['score'], -rating, name)
+
+    players.sort(key=swiss_key)
+
+    bye_player = None
+    if len(players) % 2 == 1:
+        # Choose the lowest-ranked player without a bye yet
+        for pid in reversed(players):
+            if not standings[pid]['had_bye']:
+                bye_player = pid
+                break
+        if bye_player is None:
+            bye_player = players[-1]
+        players.remove(bye_player)
+
+    def backtrack(remaining, current):
+        if not remaining:
+            return current
+        first = remaining[0]
+        for idx in range(1, len(remaining)):
+            opponent = remaining[idx]
+            if opponent not in history[first]:
+                new_remaining = remaining[1:idx] + remaining[idx + 1 :]
+                res = backtrack(new_remaining, current + [(first, opponent)])
+                if res is not None:
+                    return res
+        return None
+
+    pairings = backtrack(players, [])
+    if pairings is None:
+        # Allow rematches as a fallback if unique pairing impossible
+        pairings = []
+        temp = players[:]
+        while temp:
+            p1 = temp.pop(0)
+            p2 = temp.pop(0)
+            pairings.append((p1, p2))
+
+    if bye_player is not None:
+        pairings.append((bye_player, None))
+
+    return pairings
+
+
+def knockout_pairings_from_players(player_ids):
+    """Pair players sequentially for knockout play."""
+    pairings = []
+    for i in range(0, len(player_ids) - 1, 2):
+        pairings.append((player_ids[i], player_ids[i + 1]))
+    if len(player_ids) % 2 == 1:
+        pairings.append((player_ids[-1], None))
+    return pairings
 
 # --- FLASK ROUTES ---
 
@@ -365,21 +601,77 @@ def edit_tournament(tournament_id):
                 (tournament_id,)
             ).fetchall()
         }
-        fixtures = conn.execute('''
-            SELECT f.*, m1.name as player1_name, m2.name as player2_name
-            FROM fixtures f
-            JOIN members m1 ON f.player1_id = m1.id
-            LEFT JOIN members m2 ON f.player2_id = m2.id
-            WHERE f.tournament_id = ? AND f.round = 1
-            ORDER BY f.id
-        ''', (tournament_id,)).fetchall()
+
+        fixtures = get_all_fixtures(conn, tournament_id)
+        participants = list(selected_ids)
+        member_map = fetch_members_by_ids(conn, participants)
+        standings_raw, history, standings_table = compile_history_and_standings(participants, fixtures, member_map)
+
+        fixtures_by_round = defaultdict(list)
+        for fixture in fixtures:
+            fixtures_by_round[fixture['round']].append(fixture)
+        max_round = max(fixtures_by_round.keys(), default=0)
+        round_numbers = sorted(fixtures_by_round.keys())
+
+        generate_disabled_reason = None
+        can_generate = True
+        generate_label = 'Generate Round 1'
+        if not participants:
+            can_generate = False
+            generate_disabled_reason = 'Add participants before generating fixtures.'
+        else:
+            if max_round == 0:
+                generate_label = 'Generate Round 1'
+            else:
+                generate_label = 'Generate Next Round'
+                unfinished = conn.execute(
+                    'SELECT COUNT(*) FROM fixtures WHERE tournament_id = ? AND round = ? AND result = "TBD"',
+                    (tournament_id, max_round),
+                ).fetchone()[0]
+                if unfinished:
+                    can_generate = False
+                    generate_disabled_reason = 'Complete all results in the current round first.'
+            if tournament['format'] == 'Round-robin' and fixtures:
+                can_generate = False
+                generate_disabled_reason = 'Round-robin schedules are generated in full.'
+
+        all_results_recorded = fixtures and all(f['result'] != 'TBD' for f in fixtures)
+        tournament_complete = False
+        if tournament['format'] == 'Round-robin' and participants:
+            expected_rounds = len(participants) if len(participants) % 2 == 1 else max(len(participants) - 1, 1)
+            if fixtures and max_round >= expected_rounds and all_results_recorded:
+                tournament_complete = True
+        elif tournament['format'] == 'Swiss':
+            if fixtures and all_results_recorded and participants and all(len(history[pid]) >= len(participants) - 1 for pid in participants):
+                tournament_complete = True
+        elif tournament['format'] == 'Knockout' and max_round:
+            winners = []
+            for fixture in sorted(fixtures_by_round[max_round], key=lambda f: f['id']):
+                if fixture['player2_id'] is None:
+                    winners.append(fixture['player1_id'])
+                elif fixture['result'] == '1-0':
+                    winners.append(fixture['player1_id'])
+                elif fixture['result'] == '0-1':
+                    winners.append(fixture['player2_id'])
+            tournament_complete = len(winners) == 1 and all_results_recorded
+
+        if tournament_complete:
+            can_generate = False
+            if not generate_disabled_reason:
+                generate_disabled_reason = 'Tournament complete.'
 
     return render_template(
         'edit-tournament.html',
         tournament=tournament,
         members=members,
         selected_ids=selected_ids,
-        fixtures=fixtures
+        fixtures_by_round=fixtures_by_round,
+        round_numbers=round_numbers,
+        standings=standings_table,
+        can_generate=can_generate,
+        generate_label=generate_label,
+        generate_disabled_reason=generate_disabled_reason,
+        tournament_complete=tournament_complete,
     )
 
 @app.route('/delete_tournament/<int:tournament_id>', methods=['POST'])
@@ -526,72 +818,149 @@ def edit_member(member_id):
 @app.route('/tournament/<int:tournament_id>/generate_fixtures', methods=['POST'])
 @login_required
 def generate_fixtures(tournament_id):
-    # Generate round 1 fixtures for a tournament (Swiss, Knockout, or Round Robin).
-    # - Deletes any existing round 1 fixtures for the tournament
-    # - Pairs participants according to the selected format
-    # - Handles byes for odd numbers
-    # - Saves fixtures to the database
+    """Generate fixtures for the next round of the tournament."""
     with get_db_connection() as conn:
         tournament = conn.execute('SELECT * FROM tournaments WHERE id = ?', (tournament_id,)).fetchone()
-        format_ = tournament['format']
-        participants = [row['member_id'] for row in conn.execute('SELECT member_id FROM tournament_participants WHERE tournament_id = ?', (tournament_id,)).fetchall()]
-        conn.execute('DELETE FROM fixtures WHERE tournament_id = ? AND round = 1', (tournament_id,))
-        if not participants or len(participants) < 2:
+        if not tournament:
+            flash('Tournament not found', 'danger')
+            return redirect(url_for('index'))
+
+        participants = fetch_participants(conn, tournament_id)
+        if len(participants) < 2:
             flash('At least 2 participants required to generate fixtures', 'danger')
             return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='participants'))
-        members = {row['id']: row for row in conn.execute('SELECT * FROM members WHERE id IN ({seq})'.format(seq=','.join(['?']*len(participants))), participants)}
-        pairings = []
-        n = len(participants)
-        # Pairing logic for each tournament format
-        if format_ == 'Swiss':
-            # Swiss: top half vs bottom half by rating
-            sorted_participants = sorted(participants, key=lambda x: -members[x]['rating'])
-            mid = n // 2
-            top = sorted_participants[:mid]
-            bottom = sorted_participants[mid:]
-            for i in range(min(len(top), len(bottom))):
-                pairings.append((top[i], bottom[i]))
-            if len(top) < len(bottom):
-                pairings.append((bottom[-1], None))
-        elif format_ == 'Knockout':
-            # Knockout: random shuffle, pair off, last gets bye if odd
-            shuffled = participants[:]
-            random.shuffle(shuffled)
-            for i in range(0, n-1, 2):
-                pairings.append((shuffled[i], shuffled[i+1]))
-            if n % 2 == 1:
-                pairings.append((shuffled[-1], None))
-        elif format_ == 'Round-robin':
-            # Round-robin: pair first vs last, second vs second-last, etc.
-            players = participants[:]
-            if n % 2 == 1:
-                players.append(None)
-                n += 1
-            half = n // 2
-            used = set()
-            for i in range(half):
-                p1 = players[i]
-                p2 = players[n - 1 - i]
-                if p1 is not None and p2 is not None:
-                    pairings.append((p1, p2))
-                    used.add(p1)
-                    used.add(p2)
-                elif p1 is not None and p2 is None:
-                    pairings.append((p1, None))
-                    used.add(p1)
-                elif p2 is not None and p1 is None:
-                    pairings.append((p2, None))
-                    used.add(p2)
-            for pid in participants:
-                if pid not in used:
-                    pairings.append((pid, None))
-        # Save fixtures, including byes
+
+        member_map = fetch_members_by_ids(conn, participants)
+        fixtures = get_all_fixtures(conn, tournament_id)
+        fixtures_by_round = defaultdict(list)
+        for fixture in fixtures:
+            fixtures_by_round[fixture['round']].append(fixture)
+        current_round = max(fixtures_by_round.keys(), default=0)
+
+        if current_round:
+            unfinished = conn.execute(
+                'SELECT COUNT(*) FROM fixtures WHERE tournament_id = ? AND round = ? AND result = "TBD"',
+                (tournament_id, current_round),
+            ).fetchone()[0]
+            if unfinished:
+                flash('Complete all results in the current round first.', 'danger')
+                return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='fixtures'))
+
+        format_ = tournament['format']
+
+        # Determine pairings for the next round
+        if current_round == 0:
+            next_round = 1
+            if format_ == 'Round-robin':
+                schedule = build_round_robin_schedule(participants, member_map)
+                for round_number, pairings in enumerate(schedule, start=1):
+                    for p1, p2 in pairings:
+                        result = '1-0' if p2 is None else 'TBD'
+                        conn.execute(
+                            'INSERT INTO fixtures (tournament_id, round, player1_id, player2_id, result) VALUES (?, ?, ?, ?, ?)',
+                            (tournament_id, round_number, p1, p2, result),
+                        )
+                conn.commit()
+                flash('Full round-robin schedule generated.', 'success')
+                return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='fixtures'))
+            elif format_ == 'Swiss':
+                pairings = build_initial_swiss_pairings(participants, member_map)
+            elif format_ == 'Knockout':
+                # Seed by rating for deterministic brackets
+                def knockout_seed_key(pid):
+                    member = member_map.get(pid)
+                    rating = member['rating'] if member and member['rating'] is not None else 0
+                    name = member['name'] if member else str(pid)
+                    return (-rating, name)
+
+                seeded = sorted(participants, key=knockout_seed_key)
+                pairings = knockout_pairings_from_players(seeded)
+            else:
+                flash('Unsupported tournament format.', 'danger')
+                return redirect(url_for('edit_tournament', tournament_id=tournament_id))
+        else:
+            next_round = current_round + 1
+            standings_raw, history, _ = compile_history_and_standings(participants, fixtures, member_map)
+            if format_ == 'Swiss':
+                # Check if all unique pairings exhausted
+                if all(len(history[pid]) >= len(participants) - 1 for pid in participants):
+                    flash('All players have faced each other. Swiss tournament complete.', 'info')
+                    return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='fixtures'))
+                pairings = swiss_next_round_pairings(participants, standings_raw, history, member_map)
+            elif format_ == 'Knockout':
+                previous_round = sorted(fixtures_by_round[current_round], key=lambda f: f['id'])
+                winners = []
+                for fixture in previous_round:
+                    if fixture['player2_id'] is None:
+                        winners.append(fixture['player1_id'])
+                    elif fixture['result'] == '1-0':
+                        winners.append(fixture['player1_id'])
+                    elif fixture['result'] == '0-1':
+                        winners.append(fixture['player2_id'])
+                    else:
+                        flash('Knockout fixtures must have a decisive result.', 'danger')
+                        return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='fixtures'))
+                if len(winners) <= 1:
+                    flash('Tournament already has a winner.', 'info')
+                    return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='fixtures'))
+                pairings = knockout_pairings_from_players(winners)
+            else:
+                flash('Round-robin schedules are already generated in full.', 'info')
+                return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='fixtures'))
+
+        # Save fixtures for this round
         for p1, p2 in pairings:
             result = '1-0' if p2 is None else 'TBD'
-            conn.execute('INSERT INTO fixtures (tournament_id, round, player1_id, player2_id, result) VALUES (?, 1, ?, ?, ?)', (tournament_id, p1, p2, result))
+            conn.execute(
+                'INSERT INTO fixtures (tournament_id, round, player1_id, player2_id, result) VALUES (?, ?, ?, ?, ?)',
+                (tournament_id, next_round, p1, p2, result),
+            )
         conn.commit()
-        flash('Fixtures generated for Round 1', 'success')
+
+        if format_ == 'Knockout' and len(pairings) == 1 and pairings[0][1] is None:
+            flash('Bye applied. Player advances automatically.', 'success')
+        else:
+            flash(f'Fixtures generated for round {next_round}.', 'success')
+
     return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='fixtures'))
+
+
+@app.route('/fixture/<int:fixture_id>/update', methods=['POST'])
+@login_required
+def update_fixture_result(fixture_id):
+    """Persist an updated result for a specific fixture."""
+    desired_result = request.form.get('result')
+    if desired_result not in {'TBD', '1-0', '0-1', '0.5-0.5'}:
+        flash('Invalid result value provided.', 'danger')
+        return redirect(request.referrer or url_for('index'))
+
+    with get_db_connection() as conn:
+        fixture = conn.execute(
+            '''
+            SELECT f.*, t.format
+            FROM fixtures f
+            JOIN tournaments t ON f.tournament_id = t.id
+            WHERE f.id = ?
+            ''',
+            (fixture_id,),
+        ).fetchone()
+        if not fixture:
+            flash('Fixture not found.', 'danger')
+            return redirect(url_for('index'))
+
+        if fixture['player2_id'] is None:
+            flash('Bye fixtures are automatically scored and cannot be edited.', 'info')
+            return redirect(url_for('edit_tournament', tournament_id=fixture['tournament_id'], _anchor='fixtures'))
+
+        if fixture['format'] == 'Knockout' and desired_result == '0.5-0.5':
+            flash('Knockout fixtures require a decisive result.', 'danger')
+            return redirect(url_for('edit_tournament', tournament_id=fixture['tournament_id'], _anchor='fixtures'))
+
+        conn.execute('UPDATE fixtures SET result = ? WHERE id = ?', (desired_result, fixture_id))
+        conn.commit()
+
+    flash('Fixture result updated.', 'success')
+    return redirect(url_for('edit_tournament', tournament_id=fixture['tournament_id'], _anchor='fixtures'))
 
 @app.route('/api/total_members')
 @login_required
@@ -670,38 +1039,43 @@ def change_password():
 @app.route('/tournament/<int:tournament_id>/export_fixtures_csv')
 @login_required
 def export_fixtures_csv(tournament_id):
-    # Export round 1 fixtures for a tournament as a CSV file.
-    # - Fetches all round 1 fixtures for the tournament
-    # - Returns a CSV file as a Flask Response
+    """Export the full fixture list for a tournament as CSV."""
     import csv
     from io import StringIO
+
     with get_db_connection() as conn:
-        fixtures = conn.execute('''
-            SELECT f.id, m1.name as player1_name, m2.name as player2_name, f.result
+        fixtures = conn.execute(
+            '''
+            SELECT f.id, f.round, m1.name AS player1_name, m2.name AS player2_name, f.result
             FROM fixtures f
             JOIN members m1 ON f.player1_id = m1.id
             LEFT JOIN members m2 ON f.player2_id = m2.id
-            WHERE f.tournament_id = ? AND f.round = 1
-            ORDER BY f.id
-        ''', (tournament_id,)).fetchall()
+            WHERE f.tournament_id = ?
+            ORDER BY f.round, f.id
+            ''',
+            (tournament_id,),
+        ).fetchall()
+
     si = StringIO()
     writer = csv.writer(si)
-    writer.writerow(['Fixture ID', 'Player 1', 'Player 2', 'Result'])
+    writer.writerow(['Fixture ID', 'Round', 'Player 1', 'Player 2', 'Result'])
     for fixture in fixtures:
         writer.writerow([
             fixture['id'],
+            fixture['round'],
             fixture['player1_name'],
             fixture['player2_name'] if fixture['player2_name'] else 'BYE',
-            fixture['result']
+            fixture['result'],
         ])
+
     output = si.getvalue()
     from flask import Response
+
+    filename = f'tournament_{tournament_id}_fixtures.csv'
     return Response(
         output,
         mimetype='text/csv',
-        headers={
-            'Content-Disposition': f'attachment; filename=round1_fixtures_tournament_{tournament_id}.csv'
-        }
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
     )
 
 @app.route('/manage-admins')
