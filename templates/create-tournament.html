@@ -1,38 +1,136 @@
 {% extends 'base.html' %}
 {% block content %}
-<!--
-    Tournament creation page.
-    - Admins fill out tournament details and select format.
-    - After submission, redirected to participant selection.
-    - Includes back button to dashboard.
--->
-<form class="tournament-form" action="/create-tournament" method="post" autocomplete="off">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <h2 class="create-tournament-title">Create Tournament</h2>
-    <label for="name">Tournament Name</label>
-    <input type="text" name="name" id="name" required placeholder="e.g. Sydney Open">
+<div class="main-container create-tournament-page">
+    <div class="create-tournament-header flex-between">
+        <div>
+            <h2 class="tournament-manage-title">Create New Tournament</h2>
+            <p class="muted-info mb-05">Set the basics now, then you will add players and fixtures in the next step.</p>
+        </div>
+        <a href="{{ url_for('index') }}" class="btn-secondary"><i class="fa-solid fa-house icon-left"></i>Back to
+            Dashboard</a>
+    </div>
 
-    <label for="date">Date</label>
-    <input type="date" name="date" id="date" required>
+    <div class="create-tournament-grid">
+        <form class="create-form" action="{{ url_for('create_tournament') }}" method="post" autocomplete="off" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-    <label for="location">Location</label>
-    <input type="text" name="location" id="location" required placeholder="e.g. Sydney Chess Club">
+            <section class="form-card">
+                <header class="form-card-header">
+                    <div>
+                        <h3>Tournament Basics</h3>
+                        <p class="form-card-subtitle">Give the event a clear name and choose when it runs.</p>
+                    </div>
+                </header>
+                <div class="form-grid">
+                    <div class="form-field" data-field>
+                        <label for="name" class="fw-500">Tournament Name</label>
+                        <input type="text" name="name" id="name" class="input-watch" data-preview="name"
+                            placeholder="e.g. Sydney Winter Open" required
+                            value="{{ form_values.name | default('') }}">
+                        <span class="input-hint">Keep it short and recognisable by admins and players.</span>
+                    </div>
+                    <div class="form-field" data-field>
+                        <label for="date" class="fw-500">Start Date</label>
+                        <input type="date" name="date" id="date" class="input-watch" data-preview="date"
+                            required value="{{ form_values.date | default(suggested_date) }}">
+                        <span class="input-hint">Default is the next weekend. Pick any future date you need.</span>
+                    </div>
+                </div>
+            </section>
 
-    <label for="format">Format</label>
-    <select name="format" id="format" required>
-        <option value="" disabled selected>Select format</option>
-        <option value="Swiss">Swiss</option>
-        <option value="Round-robin">Round-robin</option>
-        <option value="Knockout">Knockout</option>
-    </select>
+            <section class="form-card">
+                <header class="form-card-header">
+                    <div>
+                        <h3>Venue</h3>
+                        <p class="form-card-subtitle">Select a saved location or enter a new one.</p>
+                    </div>
+                </header>
+                <div class="location-options">
+                    {% if saved_locations %}
+                    {% for venue in saved_locations %}
+                    <label class="location-chip">
+                        <input type="radio" name="location_choice" value="{{ venue }}" class="location-radio"
+                            {% if form_values.location_choice == venue %}checked{% endif %}>
+                        <span>{{ venue }}</span>
+                    </label>
+                    {% endfor %}
+                    {% endif %}
+                    <label class="location-chip">
+                        <input type="radio" name="location_choice" value="custom" class="location-radio"
+                            {% if form_values.location_choice == 'custom' or (form_values.custom_location and form_values.location_choice not in saved_locations) or not saved_locations %}checked{% endif %}>
+                        <span>Custom venue…</span>
+                    </label>
+                </div>
+                <div class="custom-location-group" data-visible="{{ 'true' if form_values.location_choice == 'custom' else 'false' }}">
+                    <label for="custom_location" class="fw-500">Custom Venue</label>
+                    <input type="text" name="custom_location" id="custom_location" class="input-watch"
+                        data-preview="location" placeholder="Enter the venue name and address"
+                        value="{% if form_values.location_choice == 'custom' %}{{ form_values.custom_location }}{% else %}{% endif %}">
+                    <span class="input-hint">Great for pop-up events or new venues.</span>
+                </div>
+            </section>
 
-    <small class="muted-info">After creating the tournament you will be taken to the management screen, where you can
-        add participants and generate fixtures.</small>
-    <button type="submit" class="btn-primary create-tournament-btn">Create Tournament</button>
-    <a href="{{ url_for('index') }}" class="btn-secondary back-dashboard-btn">
-        <i class="fa-solid fa-home icon-left"></i>
-        Back to Dashboard
-    </a><br>
-</form>
+            <section class="form-card">
+                <header class="form-card-header">
+                    <div>
+                        <h3>Tournament Format</h3>
+                        <p class="form-card-subtitle">Choose how players will be paired in round one.</p>
+                    </div>
+                </header>
+                <div class="format-options">
+                    {% set format_options = [
+                        {'value': 'Swiss', 'title': 'Swiss System', 'desc': 'Players with similar scores meet each round; great for medium to large events.'},
+                        {'value': 'Knockout', 'title': 'Knockout', 'desc': 'Single elimination brackets. Perfect when you have time for a clear winner.'},
+                        {'value': 'Round-robin', 'title': 'Round-robin', 'desc': 'Every player meets every other player. Best for smaller groups.'}
+                    ] %}
+                    {% for option in format_options %}
+                    <label class="format-tile {% if form_values.format == option.value %}is-selected{% endif %}">
+                        <input type="radio" name="format" value="{{ option.value }}" class="format-radio input-watch"
+                            data-preview="format" {% if form_values.format == option.value %}checked{% endif %} required>
+                        <span class="format-title">{{ option.title }}</span>
+                        <span class="format-desc">{{ option.desc }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </section>
 
+            <section class="form-card accent">
+                <header class="form-card-header">
+                    <div>
+                        <h3>Ready to continue?</h3>
+                        <p class="form-card-subtitle">You will add participants, generate fixtures, and fine-tune details on the
+                            next screen.</p>
+                    </div>
+                </header>
+                <button type="submit" class="btn-primary create-tournament-btn"><i
+                        class="fa-solid fa-arrow-right icon-left"></i>Create & Continue</button>
+            </section>
+        </form>
+
+        <aside class="preview-card">
+            <h3 class="preview-title"><i class="fa-solid fa-clipboard-list icon-left"></i>Preview</h3>
+            <dl class="preview-list">
+                <div>
+                    <dt>Name</dt>
+                    <dd data-preview-target="name">{{ form_values.name | default('Tournament name pending') }}</dd>
+                </div>
+                <div>
+                    <dt>Date</dt>
+                    <dd data-preview-target="date">{{ form_values.date | default(suggested_date) }}</dd>
+                </div>
+                <div>
+                    <dt>Venue</dt>
+                    <dd data-preview-target="location">{{ form_values.location or 'Select or enter a venue' }}</dd>
+                </div>
+                <div>
+                    <dt>Format</dt>
+                    <dd data-preview-target="format">{{ form_values.format or 'Choose a format' }}</dd>
+                </div>
+            </dl>
+            <p class="preview-footnote">You can change everything later from the tournament management screen.</p>
+        </aside>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/createTournamentEnhancements.js') }}"></script>
 {% endblock %}

@@ -621,6 +621,232 @@ table th {
     background: var(--clr-summary-card-hover);
 }
 
+.create-tournament-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.create-tournament-header {
+    align-items: flex-start;
+}
+
+.create-tournament-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+    gap: 2rem;
+    align-items: start;
+}
+
+.create-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.form-card {
+    background: var(--clr-white);
+    border-radius: 12px;
+    padding: 1.5rem 1.8rem;
+    box-shadow: var(--clr-shadow-card);
+    border: rgba(128, 128, 128, 0.217) 4px solid;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+.form-card.accent {
+    background: var(--clr-primary-light);
+    border: 1px solid rgba(37, 99, 235, 0.18);
+}
+
+.form-card-header h3 {
+    font-size: 1.1rem;
+    color: var(--clr-text-main);
+}
+
+.form-card-subtitle {
+    color: var(--clr-grey);
+    font-size: 0.95rem;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.2rem 1.5rem;
+}
+
+.form-field label {
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+.form-field input,
+.custom-location-group input {
+    width: 100%;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--clr-input-border);
+    border-radius: 6px;
+    background: var(--clr-input-bg);
+    transition: border 0.18s, box-shadow 0.18s;
+}
+
+.form-field input:focus,
+.custom-location-group input:focus {
+    border-color: var(--clr-input-focus);
+    box-shadow: var(--clr-shadow-focus);
+    outline: none;
+}
+
+.input-hint {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.88rem;
+    color: var(--clr-grey);
+}
+
+.location-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+}
+
+.location-chip {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--clr-input-border);
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    background: var(--clr-input-bg);
+    cursor: pointer;
+    transition: border 0.18s, background 0.18s, color 0.18s;
+    font-size: 0.95rem;
+}
+
+.location-chip input {
+    display: none;
+}
+
+.location-chip:hover {
+    border-color: var(--clr-input-focus);
+}
+
+.location-chip input:checked + span {
+    color: var(--clr-primary);
+    font-weight: 600;
+}
+
+.custom-location-group {
+    display: none;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.custom-location-group[data-visible="true"] {
+    display: flex;
+}
+
+.format-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.format-tile {
+    border: 1px solid var(--clr-input-border);
+    border-radius: 10px;
+    padding: 1rem;
+    background: var(--clr-input-bg);
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    cursor: pointer;
+    transition: border 0.18s, box-shadow 0.18s, transform 0.18s;
+    position: relative;
+}
+
+.format-tile input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.format-tile:hover {
+    border-color: var(--clr-input-focus);
+    transform: translateY(-2px);
+}
+
+.format-tile.is-selected {
+    border-color: var(--clr-input-focus);
+    box-shadow: var(--clr-shadow-primary3);
+}
+
+.format-tile input:checked ~ .format-title {
+    color: var(--clr-primary);
+}
+
+.format-tile input:checked ~ .format-desc {
+    color: var(--clr-grey);
+}
+
+.format-title {
+    font-weight: 600;
+}
+
+.format-desc {
+    font-size: 0.9rem;
+    color: var(--clr-grey);
+    line-height: 1.4;
+}
+
+.preview-card {
+    background: var(--clr-white);
+    border-radius: 12px;
+    padding: 1.8rem;
+    box-shadow: var(--clr-shadow-card);
+    border: rgba(128, 128, 128, 0.217) 4px solid;
+    position: sticky;
+    top: 6.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+.preview-title {
+    font-size: 1.1rem;
+    color: var(--clr-text-main);
+}
+
+.preview-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.preview-list dt {
+    font-size: 0.85rem;
+    color: var(--clr-grey);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.preview-list dd {
+    margin-left: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--clr-text-main);
+}
+
+.preview-footnote {
+    font-size: 0.85rem;
+    color: var(--clr-grey);
+}
+
+.input-watch.is-complete {
+    border-color: var(--clr-input-focus);
+    box-shadow: var(--clr-shadow-focus);
+}
+
 .summary-title {
     display: block;
     font-size: 0.95rem;
@@ -1736,5 +1962,18 @@ a.no-underline {
     .participant-actions,
     .fixture-actions {
         justify-content: flex-start;
+    }
+
+    .create-tournament-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .preview-card {
+        position: static;
+        order: -1;
+    }
+
+    .format-options {
+        grid-template-columns: 1fr;
     }
 }

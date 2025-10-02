@@ -231,37 +231,84 @@ def logout():
     flash('Logged out successfully', 'success')
     return redirect(url_for('index'))
 
+def _suggested_tournament_date():
+    """Return the next weekend date (Saturday/Sunday) as YYYY-MM-DD."""
+    today = date.today()
+    for offset in range(1, 8):
+        candidate = today + timedelta(days=offset)
+        if candidate.weekday() in (5, 6):
+            return candidate.strftime('%Y-%m-%d')
+    return (today + timedelta(days=7)).strftime('%Y-%m-%d')
+
+
+def _get_saved_locations(limit=6):
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            'SELECT location, COUNT(*) as usage_count FROM tournaments GROUP BY location HAVING location != "" ORDER BY usage_count DESC, location ASC LIMIT ?'
+        , (limit,)).fetchall()
+    return [row['location'] for row in rows if row['location']]
+
+
 @app.route('/create-tournament', methods=['GET', 'POST'])
 @login_required
 def create_tournament():
     # Create a new tournament (admin only).
-    # - GET: Show tournament creation form
-    # - POST: Validate and insert tournament, redirect to participant selection
+    # - GET: Show tournament creation form with smart defaults and saved venues
+    # - POST: Validate and insert tournament, redirect to management screen
+    suggested_date = _suggested_tournament_date()
+    saved_locations = _get_saved_locations()
+    default_location_choice = saved_locations[0] if saved_locations else 'custom'
+    form_values = {
+        'name': '',
+        'date': suggested_date,
+        'location': default_location_choice if default_location_choice != 'custom' else '',
+        'location_choice': default_location_choice,
+        'custom_location': '',
+        'format': ''
+    }
+
     if request.method == 'POST':
-        name = request.form['name'].strip()
-        date = request.form['date']
-        location = request.form['location'].strip()
-        format_ = request.form['format']
+        name = request.form.get('name', '').strip()
+        date_value = request.form.get('date', '').strip()
+        format_ = request.form.get('format', '').strip()
+        location_choice = request.form.get('location_choice', '').strip()
+        custom_location = request.form.get('custom_location', '').strip()
+        location = custom_location if location_choice == 'custom' else location_choice
+
+        form_values.update({
+            'name': name,
+            'date': date_value or suggested_date,
+            'location': location,
+            'location_choice': location_choice if location_choice else '',
+            'custom_location': custom_location,
+            'format': format_
+        })
+
         # Basic validation for all fields
-        if not name or not date or not location or not format_:
-            flash('All fields are required', 'danger')
-            return render_template('create-tournament.html')
+        if location_choice == 'custom' and not custom_location:
+            flash('Please enter the custom venue name.', 'danger')
+            return render_template('create-tournament.html', saved_locations=saved_locations, suggested_date=suggested_date, form_values=form_values)
+
+        if not name or not date_value or not location or not format_:
+            flash('Please complete all required fields before continuing.', 'danger')
+            return render_template('create-tournament.html', saved_locations=saved_locations, suggested_date=suggested_date, form_values=form_values)
         try:
-            datetime.strptime(date, '%Y-%m-%d')
+            datetime.strptime(date_value, '%Y-%m-%d')
         except ValueError:
-            flash('Invalid date format. Use YYYY-MM-DD', 'danger')
-            return render_template('create-tournament.html')
+            flash('Invalid date format. Use YYYY-MM-DD.', 'danger')
+            return render_template('create-tournament.html', saved_locations=saved_locations, suggested_date=suggested_date, form_values=form_values)
         # Insert tournament and get new ID
         with get_db_connection() as conn:
             cur = conn.execute(
                 'INSERT INTO tournaments (name, date, location, format) VALUES (?, ?, ?, ?)',
-                (name, date, location, format_)
+                (name, date_value, location, format_)
             )
             tournament_id = cur.lastrowid
             conn.commit()
         flash('Tournament created successfully! Manage details, participants, and fixtures below.', 'success')
         return redirect(url_for('edit_tournament', tournament_id=tournament_id))
-    return render_template('create-tournament.html')
+
+    return render_template('create-tournament.html', saved_locations=saved_locations, suggested_date=suggested_date, form_values=form_values)
 
 @app.route('/edit-tournament/<int:tournament_id>', methods=['GET', 'POST'])
 @login_required
