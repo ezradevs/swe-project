@@ -259,39 +259,81 @@ def create_tournament():
             )
             tournament_id = cur.lastrowid
             conn.commit()
-        flash('Tournament created successfully! Now select participants and generate fixtures', 'success')
-        return redirect(url_for('manage_players', tournament_id=tournament_id))
+        flash('Tournament created successfully! Manage details, participants, and fixtures below.', 'success')
+        return redirect(url_for('edit_tournament', tournament_id=tournament_id))
     return render_template('create-tournament.html')
 
 @app.route('/edit-tournament/<int:tournament_id>', methods=['GET', 'POST'])
 @login_required
 def edit_tournament(tournament_id):
-    # Edit an existing tournament.
-    # - GET: Show tournament edit form
-    # - POST: Update tournament details
+    """Unified management screen for tournament details, participants, and fixtures."""
+    intent = request.form.get('intent')
     with get_db_connection() as conn:
-        if request.method == 'POST':
-            name = request.form['name'].strip()
-            date = request.form['date']
-            location = request.form['location'].strip()
-            format_ = request.form['format']
-            try:
-                datetime.strptime(date, '%Y-%m-%d')
-            except ValueError:
-                flash('Invalid date format. Use YYYY-MM-DD', 'danger')
-                return redirect(url_for('edit_tournament', tournament_id=tournament_id))
-            conn.execute(
-                'UPDATE tournaments SET name = ?, date = ?, location = ?, format = ? WHERE id = ?',
-                (name, date, location, format_, tournament_id)
-            )
-            conn.commit()
-            flash('Tournament updated successfully', 'success')
-            return redirect(url_for('edit_tournament', tournament_id=tournament_id))
         tournament = conn.execute('SELECT * FROM tournaments WHERE id = ?', (tournament_id,)).fetchone()
-    if not tournament:
-        flash('Tournament not found', 'danger')
-        return redirect(url_for('index'))
-    return render_template('edit-tournament.html', tournament=tournament)
+        if not tournament:
+            flash('Tournament not found', 'danger')
+            return redirect(url_for('index'))
+
+        if request.method == 'POST':
+            if intent == 'update_details':
+                name = request.form['name'].strip()
+                date_value = request.form['date']
+                location = request.form['location'].strip()
+                format_ = request.form['format']
+
+                if not name or not date_value or not location or not format_:
+                    flash('All tournament fields are required.', 'danger')
+                    return redirect(url_for('edit_tournament', tournament_id=tournament_id))
+                try:
+                    datetime.strptime(date_value, '%Y-%m-%d')
+                except ValueError:
+                    flash('Invalid date format. Use YYYY-MM-DD.', 'danger')
+                    return redirect(url_for('edit_tournament', tournament_id=tournament_id))
+
+                conn.execute(
+                    'UPDATE tournaments SET name = ?, date = ?, location = ?, format = ? WHERE id = ?',
+                    (name, date_value, location, format_, tournament_id)
+                )
+                conn.commit()
+                flash('Tournament details updated successfully.', 'success')
+                return redirect(url_for('edit_tournament', tournament_id=tournament_id))
+
+            if intent == 'save_participants':
+                selected = request.form.getlist('participants')
+                conn.execute('DELETE FROM tournament_participants WHERE tournament_id = ?', (tournament_id,))
+                for member_id in selected:
+                    conn.execute(
+                        'INSERT INTO tournament_participants (tournament_id, member_id) VALUES (?, ?)',
+                        (tournament_id, int(member_id))
+                    )
+                conn.commit()
+                flash('Participants updated.', 'success')
+                return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='participants'))
+
+        members = conn.execute('SELECT * FROM members ORDER BY rating DESC, name ASC').fetchall()
+        selected_ids = {
+            row['member_id']
+            for row in conn.execute(
+                'SELECT member_id FROM tournament_participants WHERE tournament_id = ?',
+                (tournament_id,)
+            ).fetchall()
+        }
+        fixtures = conn.execute('''
+            SELECT f.*, m1.name as player1_name, m2.name as player2_name
+            FROM fixtures f
+            JOIN members m1 ON f.player1_id = m1.id
+            LEFT JOIN members m2 ON f.player2_id = m2.id
+            WHERE f.tournament_id = ? AND f.round = 1
+            ORDER BY f.id
+        ''', (tournament_id,)).fetchall()
+
+    return render_template(
+        'edit-tournament.html',
+        tournament=tournament,
+        members=members,
+        selected_ids=selected_ids,
+        fixtures=fixtures
+    )
 
 @app.route('/delete_tournament/<int:tournament_id>', methods=['POST'])
 @login_required
@@ -429,37 +471,6 @@ def edit_member(member_id):
         flash('Member updated successfully', 'success')
     return redirect(url_for('manage_members'))
 
-@app.route('/tournament/<int:tournament_id>/manage-players', methods=['GET', 'POST'])
-@login_required
-def manage_players(tournament_id):
-    # Manage tournament participants and view round 1 fixtures.
-    # - GET: Show participant selection and fixtures
-    # - POST: Save selected participants for the tournament
-    with get_db_connection() as conn:
-        tournament = conn.execute('SELECT * FROM tournaments WHERE id = ?', (tournament_id,)).fetchone()
-        members = conn.execute('SELECT * FROM members ORDER BY rating DESC, name ASC').fetchall()
-        selected_ids = [row['member_id'] for row in conn.execute('SELECT member_id FROM tournament_participants WHERE tournament_id = ?', (tournament_id,)).fetchall()]
-        fixtures = conn.execute('''
-            SELECT f.*, m1.name as player1_name, m2.name as player2_name
-            FROM fixtures f
-            JOIN members m1 ON f.player1_id = m1.id
-            LEFT JOIN members m2 ON f.player2_id = m2.id
-            WHERE f.tournament_id = ? AND f.round = 1
-            ORDER BY f.id
-        ''', (tournament_id,)).fetchall()
-
-        if request.method == 'POST' and 'participants' in request.form:
-            # Save selected participants for the tournament
-            selected = request.form.getlist('participants')
-            conn.execute('DELETE FROM tournament_participants WHERE tournament_id = ?', (tournament_id,))
-            for member_id in selected:
-                conn.execute('INSERT INTO tournament_participants (tournament_id, member_id) VALUES (?, ?)', (tournament_id, member_id))
-            conn.commit()
-            flash('Participants updated', 'success')
-            return redirect(url_for('manage_players', tournament_id=tournament_id))
-
-    return render_template('manage-players.html', tournament=tournament, members=members, selected_ids=selected_ids, fixtures=fixtures)
-
 @app.route('/tournament/<int:tournament_id>/generate_fixtures', methods=['POST'])
 @login_required
 def generate_fixtures(tournament_id):
@@ -475,7 +486,7 @@ def generate_fixtures(tournament_id):
         conn.execute('DELETE FROM fixtures WHERE tournament_id = ? AND round = 1', (tournament_id,))
         if not participants or len(participants) < 2:
             flash('At least 2 participants required to generate fixtures', 'danger')
-            return redirect(url_for('manage_players', tournament_id=tournament_id))
+            return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='participants'))
         members = {row['id']: row for row in conn.execute('SELECT * FROM members WHERE id IN ({seq})'.format(seq=','.join(['?']*len(participants))), participants)}
         pairings = []
         n = len(participants)
@@ -528,7 +539,7 @@ def generate_fixtures(tournament_id):
             conn.execute('INSERT INTO fixtures (tournament_id, round, player1_id, player2_id, result) VALUES (?, 1, ?, ?, ?)', (tournament_id, p1, p2, result))
         conn.commit()
         flash('Fixtures generated for Round 1', 'success')
-    return redirect(url_for('manage_players', tournament_id=tournament_id))
+    return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='fixtures'))
 
 @app.route('/api/total_members')
 @login_required
@@ -747,7 +758,7 @@ def clear_fixtures(tournament_id):
         conn.execute('DELETE FROM fixtures WHERE tournament_id = ?', (tournament_id,))
         conn.commit()
     flash('All fixtures cleared for this tournament', 'success')
-    return redirect(url_for('manage_players', tournament_id=tournament_id))
+    return redirect(url_for('edit_tournament', tournament_id=tournament_id, _anchor='fixtures'))
 
 if __name__ == '__main__':
     # Run the Flask app. Use FLASK_DEBUG=1 to enable debug.
