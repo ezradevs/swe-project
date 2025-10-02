@@ -9,47 +9,79 @@
 <div class="main-container">
     <div class="members-header">
         <h2>Club Members</h2>
-        <button class="btn-primary ml-auto" id="addMemberBtn" type="button">
-            <i class="fa-solid fa-user-plus icon-left"></i>Add Member
-        </button>
+        <div class="members-header-actions">
+            <button class="btn-secondary" type="button" id="resetFiltersBtn">
+                <i class="fa-solid fa-rotate-left icon-left"></i>Reset Filters
+            </button>
+            <button class="btn-primary" id="addMemberBtn" type="button">
+                <i class="fa-solid fa-user-plus icon-left"></i>Add Member
+            </button>
+        </div>
     </div>
-    <a href="{{ url_for('index') }}" class="btn-secondary mb-1em">
-        <i class="fa-solid fa-house icon-left"></i>
-        Back to Dashboard
-    </a>
-    <table class="tournament-table members-table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Rating</th>
-                <th>Joined</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for member in members %}
-            <tr data-member-id="{{ member['id'] }}" data-member-name="{{ member['name'] }}"
-                data-member-email="{{ member['email'] or '' }}" data-member-rating="{{ member['rating'] }}">
-                <td>{{ member['name'] }}</td>
-                <td>{{ member['email'] or '-' }}</td>
-                <td>{{ member['rating'] }}</td>
-                <td>{% set dt = member['joined_at'] %}{{ dt[:10].split('-')[2] }}-{{ dt[:10].split('-')[1] }}-{{
-                    dt[:10].split('-')[0] }}</td>
-                <td>
-                    <button type="button" class="btn-table btn-edit" onclick="openEditModal(this)"><i
-                            class="fa-solid fa-pen"></i></button>
-                    <form method="post" action="{{ url_for('delete_member', member_id=member['id']) }}"
-                        class="inline-form">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <button type="submit" class="btn-table btn-delete"
-                            onclick="return confirm('Delete this member?');"><i class="fa-solid fa-trash"></i></button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="members-controls">
+        <a href="{{ url_for('index') }}" class="btn-secondary">
+            <i class="fa-solid fa-house icon-left"></i>
+            Back to Dashboard
+        </a>
+        <div class="members-controls-spacer"></div>
+        <div class="members-filters">
+            <div class="filter-group">
+                <label for="memberSearch" class="filter-label">Search</label>
+                <input type="search" id="memberSearch" placeholder="Search by name or email">
+            </div>
+            <div class="filter-group rating-group">
+                <label class="filter-label">Rating range</label>
+                <div class="rating-inputs">
+                    <input type="number" id="ratingMin" placeholder="Min" min="100" max="3000">
+                    <span>–</span>
+                    <input type="number" id="ratingMax" placeholder="Max" min="100" max="3000">
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="members-table-wrapper">
+        <table class="tournament-table members-table" id="membersTable">
+            <thead>
+                <tr>
+                    <th data-sort-key="name">Name <i class="fa-solid fa-sort sort-indicator"></i></th>
+                    <th data-sort-key="email">Email <i class="fa-solid fa-sort sort-indicator"></i></th>
+                    <th data-sort-key="rating" class="numeric">Rating <i class="fa-solid fa-sort sort-indicator"></i>
+                    </th>
+                    <th data-sort-key="joined" class="numeric">Joined <i class="fa-solid fa-sort sort-indicator"></i>
+                    </th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for member in members %}
+                <tr data-member-id="{{ member['id'] }}" data-member-name="{{ member['name'] }}"
+                    data-member-email="{{ member['email'] or '' }}" data-member-rating="{{ member['rating'] }}"
+                    data-member-joined="{{ member['joined_at'][:10] }}">
+                    <td class="cell-name">{{ member['name'] }}</td>
+                    <td class="cell-email">{{ member['email'] or '-' }}</td>
+                    <td class="cell-rating">{{ member['rating'] }}</td>
+                    <td class="cell-joined">{% set dt = member['joined_at'] %}{{ dt[:10].split('-')[2] }}-{{
+                        dt[:10].split('-')[1] }}-{{ dt[:10].split('-')[0] }}</td>
+                    <td class="cell-actions">
+                        <button type="button" class="btn-table btn-edit"><i
+                                class="fa-solid fa-pen"></i></button>
+                        <form method="post" action="{{ url_for('delete_member', member_id=member['id']) }}"
+                            class="inline-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" class="btn-table btn-delete"
+                                onclick="return confirm('Delete this member?');"><i
+                                    class="fa-solid fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="members-empty-state" id="membersEmptyState">
+            <i class="fa-solid fa-users-slash"></i>
+            <p>No members match the current filters.</p>
+        </div>
+    </div>
 </div>
 <!-- Add Member Modal -->
 <div id="addMemberModal" class="modal modal-hide">
@@ -86,5 +118,8 @@
     </div>
 </div>
 <!-- Scripts for modal logic -->
+{% block scripts %}
 <script src="{{ url_for('static', filename='js/addMemberModal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/manageMembersEnhancements.js') }}"></script>
+{% endblock %}
 {% endblock %}
